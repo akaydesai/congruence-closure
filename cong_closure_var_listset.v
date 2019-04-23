@@ -289,6 +289,8 @@ Definition create_ufs (l : set (term*term)) : (set (set term)) :=
 Compute create_ufs [(var 1, var 2); (var 1, var 3); (var 3,var 4)].
 (* Why no type error due to set vs list discrepancy? Coz Definition is at term level. *)
 
+(* Theorem create_ufs_sound_complete : forall l t, *)
+
 (* ---- MAIN INVARIANTS ---- *)
 Print set_In. Check term_eq_dec.
 (* Invariant for ufs, states that all elements of a class are equal wrt l. *)
@@ -299,34 +301,9 @@ Definition EqInvar (l: set (term * term)) (ufs: set (set term)) :=
 Print EqInvar.
 (* Disjoint classes invariant for ufs. Required for uniqueness of representative. *)
 Definition DisjntInvar (ufs: set (set term)) := 
-  forall (c1 c2 : set term), set_In c1 ufs /\ set_In c2 ufs ->
+  forall (c1 c2 : set term), set_In c1 ufs /\ set_In c2 ufs -> c1 <> c2 ->
     ~ (exists x, set_In x c1 /\ set_In x c2).
 (* ------------ ------------ *)
-(* Search "eq_dec".
-Fixpoint has_succ (x : nat) (l : list term) : option term :=
-  match l with
-  | [] => None
-  | h::l'=> match term_eq_dec (var (S x)) h with
-            | left _ _ => Some h
-            | right _ _ => has_succ x l'
-            end
-  end.
-(* This works ok, then why doesn't uf_find? *)
-Compute has_succ 3 [(var 2); (var 1); (var 4)].
-
-Check set_In_dec term_eq_dec (var 3) (cons (var 3) nil).
-Check set_In_dec. Print option. Print sumbool. About set_In_dec.
-(* Approach 1 for find *)
-Fixpoint uf_find (x : term) (ufs : set (set term)) : option (set term) :=
-  match ufs with
-  | [] => None
-  | uh::ufs' => match (set_In_dec term_eq_dec x uh) with (* set_In_dec is opaque. *)
-                | left _ _ => Some uh 
-                | right _ _ => uf_find x ufs'
-                end
-  end.
-Compute uf_find (var 3) nil.
-Compute uf_find (var 3) (cons nil nil). (* Why not normal? *) *)
 
 Check set_mem term_eq_dec.
 (* Approach 1 for find *)
@@ -353,8 +330,9 @@ Compute uf_find (var 3) (create_ufs [(var 1, var 2); (var 1, var 3); (var 3,var 
 Check set_add.
 Compute set_setterm_add (set_union term_eq_dec [(var 5)] [(var 3)]) (set_remove setterm_eq_dec [(var 3)] [[(var 1);(var 2)];[(var 3)];[(var 4)]]).
 Compute set_remove setterm_eq_dec [(var 3)] (set_remove setterm_eq_dec [(var 3)] [[(var 1);(var 2)];[(var 3)];[(var 4)]]). (* Removing elem not in set. *)
+
 (* Merge classes containing x and y. *) 
-(* Dep types to assert x & y oocur in some class? *) (* merge needs "proof l a b" *)
+(* Dep types to assert x & y occur in some class? *) (* merge needs "proof l a b" *)
 Definition uf_merge (ufs : set (set term)) (x y :term) : set (set term) :=
   let Qx := uf_find x ufs in (* Qx : query x *)
   let Qy := uf_find y ufs in
@@ -366,6 +344,34 @@ Definition uf_merge (ufs : set (set term)) (x y :term) : set (set term) :=
 
 Compute uf_merge [[(var 1);(var 2)];[(var 3)];[(var 4)]] (var 3) (var 0).
 Compute uf_merge [[(var 1);(var 2)];[(var 3)];[(var 4)]] (var 3) (var 1).
+
+(* Theorem uf_merge_inv : forall l ufs a b, set_In (a,b) l  /\ EqInvar l ufs -> EqInvar l (uf_merge ufs a b).
+Proof.
+  intros. unfold EqInvar in *. intros. destruct H, H1.
+(*   assert(exists Ca, set_In a Ca /\ set_In Ca ufs). admit. *)
+(*   assert(exists Cb, set_In b Cb /\ set_In Cb ufs). admit. *)
+(*   destruct H4 as [Ca], H5 as [Cb]. pose (U := set_union term_eq_dec Ca Cb). *)
+  unfold uf_merge in H0. case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2. 
+Abort. *)
+
+Theorem uf_merge_EqInvar : forall l ufs a b,
+  EqInvar l ufs -> set_In (a,b) l -> EqInvar l (uf_merge ufs a b).
+Proof.
+  intros l ufs a b H1 H2. unfold EqInvar in *. intros c H3 x y H4.
+  unfold uf_merge in H3. 
+  case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2;
+  try (apply (H1 c); assumption).
+  assert (HA : set_In a s). admit. assert (HB : set_In b s0). admit.
+  (* Show that removing things from ufs maintains invariant. *)
+  (* Then show adding union maintains invariant. *)
+  remember (set_setterm_add (set_union term_eq_dec s s0)
+          (set_remove setterm_eq_dec s0 (set_remove setterm_eq_dec s ufs))) as newUfs.
+  assert (T : EqInvar l newUfs).
+  {
+    admit.
+  }
+  unfold EqInvar in T. apply (T c). assumption.
+Admitted.
 
 Fixpoint do_cc (work : set (term*term)) (ufs : set (set term)) :=
   match work with
@@ -406,15 +412,6 @@ Proof.
   - simpl. reflexivity.
   - simpl. destruct a. rewrite uf_merge_emp. assumption.
 Qed.
-
-(* Theorem uf_merge_inv : forall a b l ufs, set_In (a,b) l  /\ EqInvar l ufs -> EqInvar l (uf_merge ufs a b).
-Proof.
-  intros. unfold EqInvar in *. intros. destruct H, H1.
-(*   assert(exists Ca, set_In a Ca /\ set_In Ca ufs). admit. *)
-(*   assert(exists Cb, set_In b Cb /\ set_In Cb ufs). admit. *)
-(*   destruct H4 as [Ca], H5 as [Cb]. pose (U := set_union term_eq_dec Ca Cb). *)
-  unfold uf_merge in H0. case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2. 
-Abort. *)
 
 Theorem do_cc_inv : 
   forall (l: set (term * term)) (ufs: set (set term)), 
