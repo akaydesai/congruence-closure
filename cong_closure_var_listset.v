@@ -287,6 +287,37 @@ Fixpoint uf_find (x : term) (ufs : set (set term)) : option (set term) :=
 Compute uf_find (var 3) (cons ((cons (var 3) nil)) nil).
 Compute uf_find (var 3) (create_ufs [(var 1, var 2); (var 1, var 3); (var 3,var 4)]).
 
+Lemma DisjntInvar_tail : forall a l, DisjntInvar (a::l) -> DisjntInvar l.
+Proof.
+Admitted.
+
+Theorem uf_find_sound_complete : forall a s ufs,
+  DisjntInvar ufs ->
+    uf_find a ufs = Some s <-> set_In s ufs /\ set_In a s.
+Proof.
+  intros a s ufs Hdisj. split.
+  (* One direction does not need uniqueness. *)
+  - induction ufs as [|uh ufs' IHufs']. 
+    + intros. inversion H.
+    + intros H1. simpl in *. case (set_mem term_eq_dec a uh) eqn:case1.
+      * { inversion H1. split.
+        - left. reflexivity.
+        - subst. Search set_mem. apply set_mem_correct1 in case1. assumption. }
+      * { split.
+        - right. apply IHufs' in H1. 
+          + destruct H1. assumption.
+          + apply DisjntInvar_tail in Hdisj. assumption.
+        - apply IHufs'; try (apply DisjntInvar_tail in Hdisj); assumption. }
+  - intros H1. induction ufs as [|uh ufs' IHufs'].
+    + destruct H1. contradiction.
+    + simpl. case (set_mem term_eq_dec a uh) eqn:case1.
+      * { simpl in *. destruct H1 as [[H1 | H2] H3].
+        - subst. reflexivity.
+        - apply set_mem_correct1 in case1. apply DisjntInvar_tail in Hdisj. admit.  }
+      * apply IHufs'. simpl in *. (* *)
+Abort.
+
+
 (* Approach 2 for find - returning proofs. *)
 (* Fixpoint uf_search (x:term) (ufs : set (set term)) : 
   forall (c : set term), {set_In x c} + {~ set_In x c} :=
@@ -421,18 +452,30 @@ Theorem do_cc_inv :
   forall (l: set (term * term)) (ufs: set (set term)), 
     EqInvar l ufs -> EqInvar l (do_cc l ufs).
 Proof.
+  intros. induction l as [| hl l' IHl'].
+  - simpl. assumption.
+  - simpl in *. destruct hl as [hl1 hl2].
+    remember (uf_merge ufs hl1 hl2) as mergdl. unfold uf_merge in Heqmergdl. 
+    case (uf_find hl1 (ufs)) eqn: case1, (uf_find hl2 (ufs)) eqn: case2.
+    * admit.
+    * unfold EqInvar. intros c H1. unfold EqInvar in H. apply H.
+      rewrite Heqmergdl in H1.
+    
+
   intros. induction ufs as [|uh ufs' IHufs'].
   - rewrite do_cc_emp. assumption.
   - induction l as [| hl l' IHl'].
     + simpl in *. assumption.
-    + (* Show prop of EqInvar WRT ufs. ie. From "EqInVar (hl::l') (uh::ufs')" follows: *)
+    + (* Show prop of EqInvar WRT ufs. ie. From "EqInvar (hl::l') (uh::ufs')" follows: *)
     assert (EqInvar (hl::l') ufs'). admit.
     (* Now, how do you write "do_cc l (uh::ufs')" into "do_cc l ufs'" *)
     simpl in *. destruct hl as [hl1 hl2]. (* Need case on uh = find(hl1 or hl2) *)
+(*     remember (uf_merge (uh :: ufs') hl1 hl2) as H_merg. *)
     unfold uf_merge.
     case (uf_find hl1 (uh::ufs')) eqn: case1, (uf_find hl2 (uh::ufs')) eqn: case2.
-      * unfold set_setterm_add.
+      * unfold set_setterm_add. admit.
         (* Damn *) 
+      * apply.
     
 
 
