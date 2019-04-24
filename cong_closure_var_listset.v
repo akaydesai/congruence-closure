@@ -401,7 +401,7 @@ Proof.
   unfold uf_merge in H0. case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2. 
 Abort. *)
 
-Theorem uf_merge_EqInvar : forall l ufs a b,
+(* Theorem uf_merge_EqInvar : forall l ufs a b,
   EqInvar l ufs -> set_In (a,b) l -> EqInvar l (uf_merge ufs a b).
 Proof.
   intros l ufs a b H1 H2. unfold EqInvar in *. intros c H3 x y H4.
@@ -418,7 +418,7 @@ Proof.
     admit.
   }
   unfold EqInvar in T. apply (T c). assumption.
-Abort.
+Abort. *)
 
 Theorem uf_merge_invariant : forall a b l ufs newUfs, 
   set_In (a,b) l  -> EqInvar l ufs -> DisjntInvar ufs -> 
@@ -440,12 +440,15 @@ Proof.
     unfold EqInvar, DisjntInvar in T. (* destruct T as [T1 T2]. *)
     apply (T c); assumption.
   - unfold DisjntInvar in *. intros c1 c2 x H5 H'. apply (H3 c1 c2 x).
-    + case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2; try (subst; assumption).
-      4: { 
+    + case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2; try (subst; assumption);
+      try (unfold uf_merge in H4; rewrite case1 in H4; try rewrite case2 in H4;
+       subst; assumption). (*Shows newUfs = ufs for 3 cases. *)
+     (* That leaves only one goal, which is false. :/ *)
+      unfold uf_merge in H4. rewrite case1, case2 in H4. admit.
     + assumption.
 Admitted.
     
-    destruct H6 as [x H6]. apply (H3 c1 c2).
+(*     destruct H6 as [x H6]. apply (H3 c1 c2).
     + unfold uf_merge in H4. 
       case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2; try (subst; assumption).
       exfalso. assert (T : DisjntInvar newUfs).
@@ -457,7 +460,7 @@ Admitted.
     + assumption.
     + exists x. assumption.
 Admitted.
-  
+   *)
 Fixpoint do_cc (work : set (term*term)) (ufs : set (set term)) :=
   match work with
   | nil => ufs
