@@ -22,6 +22,11 @@ term_eq_dec is defined  *)
 (* a = b \/ a <> b. *)
 Corollary term_eq_decidable : forall (a b:term), Decidable.decidable (a = b). 
 Proof. intros. pose ( T := term_eq_dec a b). destruct T. left. assumption. right. assumption. Qed.
+Check set_In_dec term_eq_dec.
+Corollary set_In_decidable : 
+  forall (a : term) (s : set term), 
+    Decidable.decidable (set_In a s). 
+Proof. intros. pose ( T := set_In_dec term_eq_dec a s). destruct T. left. assumption. right. assumption. Qed.
 
 (* Let's obtain a decision procedure for term*term *)
 Definition term_pair_beq (x y : term * term) : bool :=
@@ -315,7 +320,6 @@ Proof.
       * { simpl in *. destruct H1 as [[H1 | H2] H3].
         - subst. reflexivity.
         - apply set_mem_correct1 in case1. 
-(*           pose (Hdisj' := Hdisj ). apply DisjntInvar_tail in Hdisj'.  *)
           (* Use DisjntInvar to show uh = s *) (* Would be nice to have NoDup as invariant?? *)
           assert ( T : uh = s).
           {
@@ -335,11 +339,11 @@ Proof.
           + assumption. }
 Qed.
 
-Theorem uf_find_none_sound_complete : forall a s ufs,
-  uf_find a ufs = None <-> ~(set_In s ufs /\ set_In a s).
+Theorem uf_find_none_sound_complete : forall a ufs,
+  uf_find a ufs = None <-> forall s, ~(set_In s ufs /\ set_In a s).
 Proof.
-  intros a s ufs. split.
-  - unfold not. intros H1 H2. induction ufs as [|uh ufs' IHufs'].
+  intros a ufs. split.
+  - unfold not. intros H1 s H2. induction ufs as [|uh ufs' IHufs'].
     + destruct H2. contradiction.
     + simpl in *. case (set_mem term_eq_dec a uh) eqn:case1.
       * inversion H1.
@@ -350,14 +354,14 @@ Proof.
             * subst. apply set_mem_complete1 in case1. contradiction.
             * assumption.
           + assumption. }
-- induction ufs as [|uh ufs' IHufs'].
-  + intros. reflexivity.
-  + intros H1. unfold not in *.
-    case (set_mem term_eq_dec a uh) eqn:case1.
-    * exfalso. apply set_mem_correct1 in case1. (* Show uh = s *)
-      assert(T1 : set_In uh (uh::ufs')). { simpl. left. reflexivity. }
-      apply
-Admitted.
+- intros H. unfold not in H. induction ufs as [|uh ufs' IHufs'].
+  + reflexivity.
+  + simpl. case (set_mem term_eq_dec a uh) eqn:case1.
+    * exfalso. apply set_mem_correct1 in case1. apply (H uh).
+      split; [ simpl; left; reflexivity | assumption ].
+    * { apply IHufs'. intros s H1. simpl set_In in *.
+        apply (H s).  destruct H1. split; try (right); assumption. }
+Qed.
 
 (* Approach 2 for find - returning proofs. *)
 (* Fixpoint uf_search (x:term) (ufs : set (set term)) : 
