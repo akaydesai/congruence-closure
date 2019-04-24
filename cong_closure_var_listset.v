@@ -272,7 +272,7 @@ Definition EqInvar (l: set (term * term)) (ufs: set (set term)) :=
 Print EqInvar.
 (* Disjoint classes invariant for ufs. Required for uniqueness of representative. *)
 Definition DisjntInvar (ufs: set (set term)) := 
-  exists (c1 c2 : set term), set_In c1 ufs /\ set_In c2 ufs -> c1 <> c2 ->
+  forall (c1 c2 : set term), set_In c1 ufs /\ set_In c2 ufs -> c1 <> c2 ->
     ~ (exists x, set_In x c1 /\ set_In x c2).
 (* ------------ ------------ *)
 
@@ -363,11 +363,16 @@ Proof.
     }
     unfold EqInvar, DisjntInvar in T. (* destruct T as [T1 T2]. *)
     apply (T c); assumption.
-  - unfold DisjntInvar in *. destruct H3 as [c1 H3], H3 as [c2 H3]. exists c1, c2. intros H5 Hineq. unfold not in *. intros H6.
-    destruct H6 as [x H6]. apply H3.
+  - unfold DisjntInvar in *. intros c1 c2 H5 Hineq. unfold not in *. intros H6.
+    destruct H6 as [x H6]. apply (H3 c1 c2).
     + unfold uf_merge in H4. 
       case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2; try (subst; assumption).
-      (* Not true. *).
+      exfalso. assert (T : DisjntInvar newUfs).
+      {
+        admit.
+      }
+      unfold DisjntInvar, not in T. 
+      apply (T c1 c2); try (assumption). exists x. assumption.
     + assumption.
     + exists x. assumption.
 Admitted.
