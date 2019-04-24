@@ -50,7 +50,9 @@ Proof.
   intros x y. unfold nat_beq, beq_nat.
   destruct x, y; reflexivity.
 Qed.
-
+Check reflect. Print reflect. 
+About term_eq_dec. (* is transparent *)
+About set_In_dec. (* is opaque. *)
 Lemma term_beq_reflect : forall x y, reflect (x = y) (term_beq x y).
 Proof.
   intros x y. apply iff_reflect. split.
@@ -105,7 +107,7 @@ Definition term_pair_eq_dec (x y : term * term) : {x = y} + {x <> y} :=
           left (injective_projections (x1,x2) (y1,y2) eqx1y1 eqx2y2)
     | right a , _ => right (uneq_pair1 (x1,x2) (y1,y2) a)
     | _ , right b => right (uneq_pair2 (x1,x2) (y1,y2) b)
-    (* Fix this hack of a definition. *)
+    (* Fix this hack of a definition? *)
     end
   end.
 
@@ -241,37 +243,6 @@ Proof.
         - assumption. }
 Qed.
   
-(*   - intros. induction l as [| hl l' IHl'].
-    + repeat destruct H.
-    + simpl in *. Search ( In _ _ \/ In _ _).
-      apply (in_or_app (subterms hl) (get_subterms l') s).
-      destruct hl as [hln]. simpl in *. destruct H as [t H].
-      left. destruct H. inversion H0. subst. destruct H.
-      * left. assumption.
-      * destruct s.
-
-  - intros. induction l as [| hl l' IHl'].
-    + repeat destruct H.
-    + simpl in *. apply in_or_app. destruct hl as [hn]. simpl.
-      left. destruct H, H. inversion H0. subst. destruct H.
-      * left. assumption.
-      * destruct s as [sn].
-    
-    + simpl in *. destruct hl as [hln]. simpl in *.
-      left. destruct H. destruct H. destruct s as [sn], x as [xn].
-      destruct H.
-      * inversion H0. subst. assumption.
-      * inversion H0. subst. (* Dammit! *)
-    
-    + simpl in *. destruct hl as [hln]. simpl in *.
-      right. apply IHl'. clear IHl'.
-      destruct H as [t H]. destruct H. exists t. split.
-      * { destruct H.
-        -  (* Not true. Damn! *)
-         }
-      * apply H. 
-Abort. *)
-
 (* Adding and removing elements from sets. *)
 Check set_add (list_eq_dec term_eq_dec) [(var 2)] nil.
 Definition setterm_eq_dec := list_eq_dec term_eq_dec.
@@ -301,7 +272,7 @@ Definition EqInvar (l: set (term * term)) (ufs: set (set term)) :=
 Print EqInvar.
 (* Disjoint classes invariant for ufs. Required for uniqueness of representative. *)
 Definition DisjntInvar (ufs: set (set term)) := 
-  forall (c1 c2 : set term), set_In c1 ufs /\ set_In c2 ufs -> c1 <> c2 ->
+  exists (c1 c2 : set term), set_In c1 ufs /\ set_In c2 ufs -> c1 <> c2 ->
     ~ (exists x, set_In x c1 /\ set_In x c2).
 (* ------------ ------------ *)
 
@@ -371,8 +342,36 @@ Proof.
     admit.
   }
   unfold EqInvar in T. apply (T c). assumption.
-Admitted.
+Abort.
 
+Theorem uf_merge_invariant : forall a b l ufs newUfs, 
+  set_In (a,b) l  -> EqInvar l ufs -> DisjntInvar ufs -> 
+    newUfs = uf_merge ufs a b -> 
+      EqInvar l newUfs /\ DisjntInvar newUfs.
+Proof.
+  intros a b l ufs newUfs H1 H2 H3 H4. split.
+  - unfold EqInvar in *. intros c H5 x y H6. unfold uf_merge in H4.
+    case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2;
+    try (subst; apply (H2 c); assumption; assumption).
+    assert (HA : set_In a s). admit. assert (HB : set_In b s0). admit.
+    clear case1 case2.
+    assert (T : EqInvar l newUfs).
+    {
+      (* Show that removing things from ufs maintains invariant. *)
+      (* Then show adding union maintains invariant. *)
+      clear H6. admit.
+    }
+    unfold EqInvar, DisjntInvar in T. (* destruct T as [T1 T2]. *)
+    apply (T c); assumption.
+  - unfold DisjntInvar in *. destruct H3 as [c1 H3], H3 as [c2 H3]. exists c1, c2. intros H5 Hineq. unfold not in *. intros H6.
+    destruct H6 as [x H6]. apply H3.
+    + unfold uf_merge in H4. 
+      case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2; try (subst; assumption).
+      (* Not true. *).
+    + assumption.
+    + exists x. assumption.
+Admitted.
+  
 Fixpoint do_cc (work : set (term*term)) (ufs : set (set term)) :=
   match work with
   | nil => ufs
@@ -401,17 +400,17 @@ Compute cc_algo [(var 1, var 2); (var 1, var 3); (var 3,var 4)] (var 2) (var 4).
 
 Lemma uf_find_emp : forall a, uf_find a [] = None.
 (* Generalize to non-occurence later. *)
-Proof. intros. reflexivity. Qed.
+Proof. intros. reflexivity. Defined.
 
 Lemma uf_merge_emp : forall a b, uf_merge [] a b = [].
-Proof. intros. unfold uf_merge. rewrite uf_find_emp. reflexivity. Qed.
+Proof. intros. unfold uf_merge. rewrite uf_find_emp. reflexivity. Defined.
 
 Lemma do_cc_emp : forall l, do_cc l [] = [].
 Proof.
   intros. induction l.
   - simpl. reflexivity.
   - simpl. destruct a. rewrite uf_merge_emp. assumption.
-Qed.
+Defined.
 
 Theorem do_cc_inv : 
   forall (l: set (term * term)) (ufs: set (set term)), 
