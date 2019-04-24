@@ -272,8 +272,9 @@ Definition EqInvar (l: set (term * term)) (ufs: set (set term)) :=
 Print EqInvar.
 (* Disjoint classes invariant for ufs. Required for uniqueness of representative. *)
 Definition DisjntInvar (ufs: set (set term)) := 
-  forall (c1 c2 : set term), set_In c1 ufs /\ set_In c2 ufs -> c1 <> c2 ->
-    ~ (exists x, set_In x c1 /\ set_In x c2).
+  forall (c1 c2 : set term) (x : term), 
+    set_In c1 ufs /\ set_In c2 ufs ->
+      set_In x c1 /\ set_In x c2 -> c1 = c2.
 (* ------------ ------------ *)
 
 Check set_mem term_eq_dec.
@@ -291,12 +292,12 @@ Lemma DisjntInvar_tail : forall a l, DisjntInvar (a::l) -> DisjntInvar l.
 Proof.
 Admitted.
 
-Theorem uf_find_sound_complete : forall a s ufs,
+Theorem uf_find_some_sound_complete : forall a s ufs,
   DisjntInvar ufs ->
     uf_find a ufs = Some s <-> set_In s ufs /\ set_In a s.
 Proof.
   intros a s ufs Hdisj. split.
-  (* One direction does not need uniqueness. *)
+  (* One direction does not need uniqueness/disjntinvar. *)
   - induction ufs as [|uh ufs' IHufs']. 
     + intros. inversion H.
     + intros H1. simpl in *. case (set_mem term_eq_dec a uh) eqn:case1.
@@ -313,10 +314,50 @@ Proof.
     + simpl. case (set_mem term_eq_dec a uh) eqn:case1.
       * { simpl in *. destruct H1 as [[H1 | H2] H3].
         - subst. reflexivity.
-        - apply set_mem_correct1 in case1. apply DisjntInvar_tail in Hdisj. admit.  }
-      * apply IHufs'. simpl in *. (* *)
-Abort.
+        - apply set_mem_correct1 in case1. 
+(*           pose (Hdisj' := Hdisj ). apply DisjntInvar_tail in Hdisj'.  *)
+          (* Use DisjntInvar to show uh = s *) (* Would be nice to have NoDup as invariant?? *)
+          assert ( T : uh = s).
+          {
+            unfold DisjntInvar in Hdisj. pose ( H := Hdisj uh s a).
+            apply H.
+            - simpl. split;[ left; reflexivity | right;assumption].
+            - split; assumption.
+          } subst. reflexivity.
+         }
+      * { apply IHufs'.
+        - apply DisjntInvar_tail in Hdisj. assumption.
+        - destruct H1. split.
+          + apply set_mem_complete1 in case1. unfold not in case1. simpl in H, case1.
+            destruct H.
+            * subst. contradiction.
+            * assumption.
+          + assumption. }
+Qed.
 
+Theorem uf_find_none_sound_complete : forall a s ufs,
+  uf_find a ufs = None <-> ~(set_In s ufs /\ set_In a s).
+Proof.
+  intros a s ufs. split.
+  - unfold not. intros H1 H2. induction ufs as [|uh ufs' IHufs'].
+    + destruct H2. contradiction.
+    + simpl in *. case (set_mem term_eq_dec a uh) eqn:case1.
+      * inversion H1.
+      * { apply IHufs'.
+        - assumption.
+        - destruct H2. split.
+          + destruct H.
+            * subst. apply set_mem_complete1 in case1. contradiction.
+            * assumption.
+          + assumption. }
+- induction ufs as [|uh ufs' IHufs'].
+  + intros. reflexivity.
+  + intros H1. unfold not in *.
+    case (set_mem term_eq_dec a uh) eqn:case1.
+    * exfalso. apply set_mem_correct1 in case1. (* Show uh = s *)
+      assert(T1 : set_In uh (uh::ufs')). { simpl. left. reflexivity. }
+      apply
+Admitted.
 
 (* Approach 2 for find - returning proofs. *)
 (* Fixpoint uf_search (x:term) (ufs : set (set term)) : 
@@ -394,7 +435,12 @@ Proof.
     }
     unfold EqInvar, DisjntInvar in T. (* destruct T as [T1 T2]. *)
     apply (T c); assumption.
-  - unfold DisjntInvar in *. intros c1 c2 H5 Hineq. unfold not in *. intros H6.
+  - unfold DisjntInvar in *. intros c1 c2 x H5 H'. apply (H3 c1 c2 x).
+    + case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2; try (subst; assumption).
+      4: { 
+    + assumption.
+Admitted.
+    
     destruct H6 as [x H6]. apply (H3 c1 c2).
     + unfold uf_merge in H4. 
       case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2; try (subst; assumption).
