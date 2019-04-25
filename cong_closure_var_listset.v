@@ -465,9 +465,9 @@ Proof.
 Qed.
 
 Lemma set_remove_split : forall (A:Type) (a:A) l1 l2 Aeq, 
-  a = a -> NoDup (l1 ++ a::l2) -> set_remove Aeq a (l1 ++ a::l2) = l1 ++ l2.
+  NoDup (l1 ++ a::l2) -> set_remove Aeq a (l1 ++ a::l2) = l1 ++ l2.
 Proof.
-  intros A a l1 l2 Aeq Hrefl Hnodup. clear Hrefl. induction l1 as [|hl1 l1' IHl1'].
+  intros A a l1 l2 Aeq Hnodup. induction l1 as [|hl1 l1' IHl1'].
   - simpl. case (Aeq a a) eqn:case1; try reflexivity. contradiction.
   -  simpl. case (Aeq a hl1) eqn:case1.
     + exfalso. (* Contradiction in Hnodup *) simpl in Hnodup.
@@ -552,7 +552,21 @@ Proof.
         (* Forgot that Eqinvar is a predicate with quantifs *)
         setoid_rewrite Hnotin. assumption.
     }
-  + admit.
+  + unfold DisjntInvar in *. intros c1 c2 x H1 H2.
+    apply (HDisj c1 c2 x).
+    * { case (setterm_eq_dec c1 c) eqn:case1, (setterm_eq_dec c2 c) eqn:case2.
+      - subst. destruct H1 as [H1 _]. Search set_remove. About set_remove_2.
+         apply (set_remove_2 setterm_eq_dec Hnodup) in H1. contradiction H1.
+         reflexivity.
+      - subst. destruct H1 as [H1 _]. Search set_remove. About set_remove_2.
+         apply (set_remove_2 setterm_eq_dec Hnodup) in H1. contradiction H1.
+         reflexivity.
+      - subst. destruct H1 as [_ H1]. Search set_remove. About set_remove_2.
+         apply (set_remove_2 setterm_eq_dec Hnodup) in H1. contradiction H1.
+         reflexivity.
+      - admit.
+      }
+    * assumption.
 Qed.
 
 (* Lemma set_rem_DisjntInvar : *)
