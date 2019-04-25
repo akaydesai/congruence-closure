@@ -295,7 +295,11 @@ Compute uf_find (var 3) (create_ufs [(var 1, var 2); (var 1, var 3); (var 3,var 
 
 Lemma DisjntInvar_tail : forall a l, DisjntInvar (a::l) -> DisjntInvar l.
 Proof.
-Admitted.
+  intros a l H1. unfold DisjntInvar in *. unfold set_In in *.
+  intros c1 c2 x H2 H3. apply (H1 c1 c2 x).
+  - destruct H2, H3. simpl. split; [ right | right ]; assumption.
+  - assumption.
+Qed.
 
 Theorem uf_find_some_sound_complete : forall a s ufs,
   DisjntInvar ufs ->
@@ -420,6 +424,10 @@ Proof.
   unfold EqInvar in T. apply (T c). assumption.
 Abort. *)
 
+Lemma set_rem_EqInvar : forall ufs
+
+Lemma set_rem_DisjntInvar :
+
 Theorem uf_merge_invariant : forall a b l ufs newUfs, 
   set_In (a,b) l  -> EqInvar l ufs -> DisjntInvar ufs -> 
     newUfs = uf_merge ufs a b -> 
@@ -429,8 +437,15 @@ Proof.
   - unfold EqInvar in *. intros c H5 x y H6. unfold uf_merge in H4.
     case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2;
     try (subst; apply (H2 c); assumption; assumption).
-    assert (HA : set_In a s). admit. assert (HB : set_In b s0). admit.
-    clear case1 case2.
+    assert (HA : set_In a s).
+    { pose (T := uf_find_some_sound_complete a s ufs).
+      apply T in H3. destruct H3 as [H3 _]. apply H3 in case1.
+      destruct case1. assumption. }
+    assert (HB : set_In b s0).
+    { pose (T := uf_find_some_sound_complete b s0 ufs).
+      apply T in H3. destruct H3 as [H3 _]. apply H3 in case2.
+      destruct case2. assumption. }
+    clear case1 case2. rename s into ca, s0 into cb.
     assert (T : EqInvar l newUfs).
     {
       (* Show that removing things from ufs maintains invariant. *)
@@ -439,13 +454,14 @@ Proof.
     }
     unfold EqInvar, DisjntInvar in T. (* destruct T as [T1 T2]. *)
     apply (T c); assumption.
-  - unfold DisjntInvar in *. intros c1 c2 x H5 H'. apply (H3 c1 c2 x).
-    + case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2; try (subst; assumption);
-      try (unfold uf_merge in H4; rewrite case1 in H4; try rewrite case2 in H4;
-       subst; assumption). (*Shows newUfs = ufs for 3 cases. *)
-     (* That leaves only one goal, which is false. :/ *)
-      unfold uf_merge in H4. rewrite case1, case2 in H4. admit.
-    + assumption.
+  - unfold DisjntInvar in H3. unfold uf_merge in H4.
+    case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2;
+    try (unfold DisjntInvar in *; intros c1 c2 x H5 H'; apply (H3 c1 c2 x); subst; assumption).
+    (*Shows newUfs = ufs for 3 cases. *)
+    + rename s into ca, s0 into cb. 
+      (* Show set operations preserve DisjntInvar *)
+      admit.
+      
 Admitted.
     
 (*     destruct H6 as [x H6]. apply (H3 c1 c2).
