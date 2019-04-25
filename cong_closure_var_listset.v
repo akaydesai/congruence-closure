@@ -424,17 +424,88 @@ Proof.
   unfold EqInvar in T. apply (T c). assumption.
 Abort. *)
 
-Lemma set_rem_EqInvar : forall ufs
+About set_remove. (*Always use About instead of Check for lib stuff, gives lots of useful info; like which args are implicit and whether definition is transparent/opaque. *)
+Lemma set_remove_notin_same : forall (A:Type) (a:A) (s:set A) Aeq, 
+  ~ set_In a s -> set_remove Aeq a s = s.
+Proof.
+  intros A a s Aeq Hnotin. induction s as [| hs s' IHs'].
+  - simpl. unfold empty_set. reflexivity.
+  - unfold not in *. unfold set_In in *. simpl in *. case (Aeq a hs) eqn:case1.
+    + exfalso. apply Hnotin. subst. left. reflexivity.
+    + apply f_equal. (* f_equal removes constructor from both sides. *)
+      apply IHs'. intros. apply Hnotin. right. assumption.
+Qed.
 
-Lemma set_rem_DisjntInvar :
+Lemma EqInvar_tail : forall l hu u, EqInvar l (hu::u) -> EqInvar l u.
+Proof.
+  intros l hu u H1. unfold EqInvar in *. intros c H2 a b H3. 
+  apply (H1 c);try (simpl; right); assumption.
+Qed.
+
+Lemma EqInvar_splits : forall l l1 l2, 
+  EqInvar l (l1++l2) <-> EqInvar l l1 /\ EqInvar l l2.
+Proof.
+  intros l l1 l2. split.
+  { intros H. unfold EqInvar in H. unfold set_In in H. 
+    Search ( In _ _ <-> In _ _ \/ In _ _ ).
+    split; unfold EqInvar; intros c H1 a b H2; apply (H c); try apply in_app_iff;
+    [ left | assumption | right | assumption ]; try assumption.
+  }
+  { intros [H1 H2]. unfold EqInvar. intros c H3 a b H4. unfold set_In in *.
+    unfold EqInvar in *. Search (In _ ( _ ++ _ )). apply in_app_iff in H3.
+    destruct H3; [ apply (H1 c) | apply (H2 c) ]; assumption.
+  }
+Qed.
+
+Lemma set_remove_split : forall (A:Type) (a:A) l1 l2 Aeq, 
+  a = a -> NoDup (l1 ++ a::l2) -> set_remove Aeq a (l1 ++ a::l2) = l1 ++ l2.
+Proof.
+  intros A a l1 l2 Aeq Hrefl Hnodup. induction l1 as [|hl1 l1' IHl1'].
+  - simpl. case (Aeq a a) eqn:case1; try reflexivity. contradiction.
+  -  simpl. case (Aeq a hl1) eqn:case1.
+    + exfalso. (* Contradiction in Hnodup *) simpl in Hnodup.
+      rewrite <- e in Hnodup. Search (NoDup _ -> _ ). Search "NoDup_remove".
+      admit. (* Easy *)
+    + apply f_equal. apply IHl1'. simpl in Hnodup. Search (NoDup ( _ :: _)).
+      destruct (NoDup_cons_iff hl1 (l1' ++ a::l2)) as [T _]. 
+      apply T in Hnodup. destruct Hnodup. assumption.
+Admitted.
+
+Check set_In_dec setterm_eq_dec.
+Lemma set_remove_EqInvar : forall l c s,
+  NoDup s -> EqInvar l s -> EqInvar l (set_remove setterm_eq_dec c s).
+Proof.
+  intros l c s Hnodup H1. case (set_In_dec setterm_eq_dec c s).
+  - intros Hin. unfold set_In in *. Search ( In _ _ -> exists _, _).
+    assert (Hin1 := Hin). apply in_split in Hin1. destruct Hin1 as [l1 [l2 H]].
+    
+    assert (R : set_remove setterm_eq_dec c s = l1 ++ l2 ).
+    { (* Wouldn't this need NoDup? Or is it enough to additionally assert 
+      that "~set_In c l1"? Let's see...guess it does. *)
+     rewrite H in *. apply (set_remove_split (set term) c l1 l2); 
+     try reflexivity; assumption.
+    }
+    setoid_rewrite R.
+    rewrite H in H1. apply EqInvar_splits in H1. destruct H1 as [H1 H2].
+    apply EqInvar_tail in H2. destruct (EqInvar_splits l l1 l2) as [_ lemma].
+    apply lemma. split; assumption.
+  - (* Show list is unchanged *)
+    intros Hnotin. Search set_remove.
+    apply (set_remove_notin_same (set term) _ _ setterm_eq_dec) in Hnotin.
+    try rewrite Hnotin. (* doesn't work! WTF!? *)
+    (* Forgot that Eqinvar is a predicate with quantifs *)
+    setoid_rewrite Hnotin. assumption.
+Qed.
+
+(* Lemma set_rem_DisjntInvar : *)
 
 Theorem uf_merge_invariant : forall a b l ufs newUfs, 
-  set_In (a,b) l  -> EqInvar l ufs -> DisjntInvar ufs -> 
+  set_In (a,b) l  -> EqInvar l ufs -> DisjntInvar ufs -> NoDup ufs ->
     newUfs = uf_merge ufs a b -> 
       EqInvar l newUfs /\ DisjntInvar newUfs.
 Proof.
-  intros a b l ufs newUfs H1 H2 H3 H4. split.
-  - unfold EqInvar in *. intros c H5 x y H6. unfold uf_merge in H4.
+  intros a b l ufs newUfs H1 H2 H3 Hnodup H4. split.
+  - unfold EqInvar. intros c H5 x y H6. unfold uf_merge in H4.
     case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2;
     try (subst; apply (H2 c); assumption; assumption).
     assert (HA : set_In a s).
@@ -450,7 +521,13 @@ Proof.
     {
       (* Show that removing things from ufs maintains invariant. *)
       (* Then show adding union maintains invariant. *)
-      clear H6. admit.
+      remember (set_remove setterm_eq_dec ca ufs) as I1.
+      remember (set_remove setterm_eq_dec cb I1) as I2.
+      assert (T1 : EqInvar l I1).
+      { rewrite HeqI1. apply (set_remove_EqInvar l ca ufs Hnodup H2). }
+      assert (T2 : EqInvar l I2).
+      { rewrite HeqI2. apply (set_remove_EqInvar l _ _ p T1). }
+      admit.
     }
     unfold EqInvar, DisjntInvar in T. (* destruct T as [T1 T2]. *)
     apply (T c); assumption.
