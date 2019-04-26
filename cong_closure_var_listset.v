@@ -574,22 +574,23 @@ Qed.
 (* Lemma set_rem_DisjntInvar : *)
 (* Add NoDup in conclusion. *)
 Theorem uf_merge_invariant : forall a b l ufs newUfs, 
-  set_In (a,b) l  -> EqInvar l ufs -> DisjntInvar ufs -> NoDup ufs ->
+  set_In (a,b) l  -> NoDup ufs -> EqInvar l ufs -> DisjntInvar ufs ->
     newUfs = uf_merge ufs a b -> 
-      EqInvar l newUfs /\ DisjntInvar newUfs.
+      NoDup newUfs /\ EqInvar l newUfs /\ DisjntInvar newUfs.
 Proof.
-  intros a b l ufs newUfs Hprf HEq HDisj Hnodup H4. split.
+  intros a b l ufs newUfs Hprf Hnodup HEq HDisj H4. split; try split.
+  - admit.
   - unfold EqInvar. intros c H5 x y H6. unfold uf_merge in H4.
     case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2;
     try (subst; apply (HEq c); assumption; assumption).
-    assert (HA : set_In a s).
+    assert (HA : set_In s ufs /\ set_In a s).
     { pose (T := uf_find_some_sound_complete a s ufs).
       apply T in HDisj. destruct HDisj as [HDisj _]. apply HDisj in case1.
-      destruct case1. assumption. }
-    assert (HB : set_In b s0).
+      assumption. }
+    assert (HB : set_In s0 ufs /\ set_In b s0).
     { pose (T := uf_find_some_sound_complete b s0 ufs).
       apply T in HDisj. destruct HDisj as [HDisj _]. apply HDisj in case2.
-      destruct case2. assumption. }
+      assumption. }
     clear case1 case2. rename s into ca, s0 into cb.
     assert (T : EqInvar l newUfs).
     {
@@ -597,12 +598,13 @@ Proof.
       (* Then show adding union maintains invariant. *)
       remember (set_remove setterm_eq_dec ca ufs) as I1.
       remember (set_remove setterm_eq_dec cb I1) as I2.
-      assert (T1 : EqInvar l I1). Print and.
-      { rewrite HeqI1. 
-        apply (set_remove_invariant l ca ufs (conj Hnodup (conj HEq HDisj))). }
-      assert (T2 : EqInvar l I2).
-      { rewrite HeqI2. 
-       (* apply (set_remove_invariant l cb _  T1). *) }
+      assert (T1 : NoDup I1 /\ EqInvar l I1 /\ DisjntInvar I1).
+      { rewrite HeqI1. split; try split;
+      apply (set_remove_invariant l ca ufs (conj Hnodup (conj HEq HDisj))). }
+      assert (T2 : NoDup I2 /\ EqInvar l I2 /\ DisjntInvar I2).
+      { rewrite HeqI2. Check set_remove_invariant l cb I1.
+       apply (set_remove_invariant l cb I1 T1). }
+      unfold set_setterm_add in *. unfold set_In in *.
       admit.
     }
     unfold EqInvar, DisjntInvar in T. (* destruct T as [T1 T2]. *)
@@ -655,12 +657,8 @@ Compute cc_algo [(var 1, var 2); (var 1, var 3); (var 3,var 4)] (var 2) (var 4).
 
 (* Lemma EqInvar_emp : forall a l, ~ EqInvar (a::l) [].  ??? *)
 
-Lemma uf_find_emp : forall a, uf_find a [] = None.
-(* Generalize to non-occurence later. *)
-Proof. intros. reflexivity. Defined.
-
 Lemma uf_merge_emp : forall a b, uf_merge [] a b = [].
-Proof. intros. unfold uf_merge. rewrite uf_find_emp. reflexivity. Defined.
+Proof. intros. unfold uf_merge. simpl. reflexivity. Defined.
 
 Lemma do_cc_emp : forall l, do_cc l [] = [].
 Proof.
@@ -673,14 +671,14 @@ Theorem do_cc_inv :
   forall (l: set (term * term)) (ufs: set (set term)), 
     EqInvar l ufs -> EqInvar l (do_cc l ufs).
 Proof.
-  intros. induction l as [| hl l' IHl'].
+(*   intros. induction l as [| hl l' IHl'].
   - simpl. assumption.
   - simpl in *. destruct hl as [hl1 hl2].
     remember (uf_merge ufs hl1 hl2) as mergdl. unfold uf_merge in Heqmergdl. 
     case (uf_find hl1 (ufs)) eqn: case1, (uf_find hl2 (ufs)) eqn: case2.
     * admit.
     * unfold EqInvar. intros c H1. unfold EqInvar in H. apply H.
-      rewrite Heqmergdl in H1.
+      rewrite Heqmergdl in H1. *)
     
 
   intros. induction ufs as [|uh ufs' IHufs'].
