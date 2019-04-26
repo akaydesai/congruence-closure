@@ -126,7 +126,8 @@ Inductive proof (l : set (term*term)) : term -> term -> Prop :=
   | proofAxm : forall s t, set_In (s, t) l -> proof l s t
   | proofRefl : forall t, proof l t t
   | proofSymm : forall s t, proof l s t -> proof l t s
-  | proofTrans : forall s t u, set_In (s,t) l -> proof l t u -> proof l s u. 
+  | proofTrans : forall s t u, set_In (s,t) l -> proof l t u -> proof l s u.
+(*   | proofCong : forall (n : nat) s t, proof l s t -> proof l (fn n s) (fn n t). *)
 
 Fixpoint subterms (t : term) : list term :=
   match t with
