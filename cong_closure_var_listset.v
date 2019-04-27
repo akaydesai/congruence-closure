@@ -586,12 +586,12 @@ Theorem uf_merge_invariant : forall a b l ufs newUfs,
     newUfs = uf_merge ufs a b -> 
       NoDup newUfs /\ EqInvar l newUfs /\ DisjntInvar newUfs.
 Proof.
-  intros a b l ufs newUfs Hprf Hnodup HEq HDisj H4. split; try split.
-  - admit.
-  - unfold EqInvar. intros c H5 x y H6. unfold uf_merge in H4.
-    case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2;
-    try (subst; apply (HEq c); assumption; assumption).
-    assert (HA : set_In s ufs /\ set_In a s).
+  intros a b l ufs newUfs Hprf Hnodup HEq HDisj H4.
+  unfold uf_merge in H4.
+  case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2;
+  try (subst; exact (conj Hnodup (conj HEq HDisj))).
+  (* Solves 3 subgoals where "newUfs = ufs" *)
+  - assert (HA : set_In s ufs /\ set_In a s).
     { pose (T := uf_find_some_sound_complete a s ufs).
       apply T in HDisj. destruct HDisj as [HDisj _]. apply HDisj in case1.
       assumption. }
@@ -600,32 +600,20 @@ Proof.
       apply T in HDisj. destruct HDisj as [HDisj _]. apply HDisj in case2.
       assumption. }
     clear case1 case2. rename s into ca, s0 into cb.
-    assert (T : EqInvar l newUfs).
-    {
       (* Show that removing things from ufs maintains invariant. *)
-      (* Then show adding union maintains invariant. *)
-      remember (set_remove setterm_eq_dec ca ufs) as I1.
-      remember (set_remove setterm_eq_dec cb I1) as I2.
-      assert (T1 : NoDup I1 /\ EqInvar l I1 /\ DisjntInvar I1).
-      { rewrite HeqI1. split; try split;
+    (* Then show adding union maintains invariant. *)
+    remember (set_remove setterm_eq_dec ca ufs) as I1.
+    remember (set_remove setterm_eq_dec cb I1) as I2.
+    assert (T1 : NoDup I1 /\ EqInvar l I1 /\ DisjntInvar I1).
+    { rewrite HeqI1. split; try split;
       apply (set_remove_invariant l ca ufs (conj Hnodup (conj HEq HDisj))). }
-      assert (T2 : NoDup I2 /\ EqInvar l I2 /\ DisjntInvar I2).
-      { rewrite HeqI2. Check set_remove_invariant l cb I1.
-       apply (set_remove_invariant l cb I1 T1). }
-      unfold set_setterm_add in *. unfold set_In in *.
-      remember (set_union term_eq_dec ca cb) as union.
-      assert (forall x' y', In x' union /\ In y' union -> proof l x' y').
-      { admit. }
-    }
-    unfold EqInvar, DisjntInvar in T. (* destruct T as [T1 T2]. *)
-    apply (T c); assumption.
-  - unfold DisjntInvar in HDisj. unfold uf_merge in H4.
-    case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2;
-    try (unfold DisjntInvar in *; intros c1 c2 x H5 H'; apply (HDisj c1 c2 x); subst; assumption). (*Shows newUfs = ufs for 3 cases. *)
-    + rename s into ca, s0 into cb. 
-      (* Show set operations preserve DisjntInvar *)
-      admit.
-      
+    assert (T2 : NoDup I2 /\ EqInvar l I2 /\ DisjntInvar I2).
+    { rewrite HeqI2. Check set_remove_invariant l cb I1.
+      apply (set_remove_invariant l cb I1 T1). }
+    unfold set_setterm_add in *. unfold set_In in *.
+    remember (set_union term_eq_dec ca cb) as union.
+    assert (forall x' y', In x' union /\ In y' union -> proof l x' y').
+    { admit. } admit.
 Admitted.
     
 (*     destruct H6 as [x H6]. apply (H3 c1 c2).
