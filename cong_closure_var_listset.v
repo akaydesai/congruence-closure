@@ -509,7 +509,7 @@ Lemma set_remove_invariant : forall l (c:set term) (s: set (set term)),
       EqInvar l (set_remove setterm_eq_dec c s) /\
         DisjntInvar (set_remove setterm_eq_dec c s).
 Proof.
-  intros l c s [Hnodup [HEq HDisj]]. split.
+  intros l c s [Hnodup [HEq HDisj]]. split; try split.
   - clear HEq. (* Derive Nodup new from Hnodup *)
     induction s as [|hs s' IHs'].
     * simpl. unfold empty_set. constructor.
@@ -528,12 +528,11 @@ Proof.
           Check set_remove_notin (set term) hs c s'.
           apply (NoDup_tail hs s') in Hnodup.
           apply (set_remove_notin (set term) hs c s'); try assumption.
-          (* FML *)
+          (* FML *) 
           apply setterm_ineq_refl. assumption.
         + apply DisjntInvar_tail in HDisj. assumption.
       }
-  - split. 
-    { case (set_In_dec setterm_eq_dec c s).
+    - case (set_In_dec setterm_eq_dec c s).
       + intros Hin. unfold set_In in *. Search ( In _ _ -> exists _, _).
         assert (Hin1 := Hin). apply in_split in Hin1. destruct Hin1 as [l1 [l2 H]].
         assert (R : set_remove setterm_eq_dec c s = l1 ++ l2 ).
@@ -552,24 +551,33 @@ Proof.
         try rewrite Hnotin. (* doesn't work! WTF!? *)
         (* Forgot that Eqinvar is a predicate with quantifs *)
         setoid_rewrite Hnotin. assumption.
-    }
-  + unfold DisjntInvar in *. intros c1 c2 x H1 H2.
+  - unfold DisjntInvar in *. intros c1 c2 x H1 H2.
     apply (HDisj c1 c2 x).
-    * { case (setterm_eq_dec c1 c) eqn:case1, (setterm_eq_dec c2 c) eqn:case2;
+    + case (setterm_eq_dec c1 c) eqn:case1, (setterm_eq_dec c2 c) eqn:case2;
       (* Solve 1st 2 cases. *) (* Search set_remove. About set_remove_2. *)
       try ( subst; destruct H1 as [H1 _];
-         apply (set_remove_2 setterm_eq_dec Hnodup) in H1; contradiction H1;
-         reflexivity ).
-      - subst. destruct H1 as [_ H1]. Search set_remove. About set_remove_2.
+     apply (set_remove_2 setterm_eq_dec Hnodup) in H1; contradiction H1;
+     reflexivity ).
+      * subst. destruct H1 as [_ H1]. Search set_remove. About set_remove_2.
          apply (set_remove_2 setterm_eq_dec Hnodup) in H1. contradiction H1.
          reflexivity.
-      - clear case1 case2. unfold set_In in *. Search set_remove. 
+      * clear case1 case2. unfold set_In in *. Search set_remove. 
         destruct H1 as [H1l H1r]. split; 
         [ apply (set_remove_1 setterm_eq_dec c1 c s) | 
           apply (set_remove_1 setterm_eq_dec c2 c s) ]; assumption.
-      }
-    * assumption.
+    + assumption.
 Qed.
+
+Lemma set_union_make_class : forall l (ufs :set (set term)) a b ca cb union,
+  NoDup ufs /\ EqInvar l ufs /\ DisjntInvar ufs ->
+    In ca ufs /\ In a ca -> 
+      In cb ufs /\ In b cb ->
+        proof l a b ->
+          union = set_union term_eq_dec ca cb->
+            forall x y, In x union /\ In y union -> proof l x y.
+Proof.
+Admitted.
+
 
 (* Lemma set_rem_DisjntInvar : *)
 (* Add NoDup in conclusion. *)
@@ -605,7 +613,9 @@ Proof.
       { rewrite HeqI2. Check set_remove_invariant l cb I1.
        apply (set_remove_invariant l cb I1 T1). }
       unfold set_setterm_add in *. unfold set_In in *.
-      admit.
+      remember (set_union term_eq_dec ca cb) as union.
+      assert (forall x' y', In x' union /\ In y' union -> proof l x' y').
+      { admit. }
     }
     unfold EqInvar, DisjntInvar in T. (* destruct T as [T1 T2]. *)
     apply (T c); assumption.
