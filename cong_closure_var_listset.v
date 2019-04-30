@@ -568,6 +568,13 @@ Proof.
     + assumption.
 Qed.
 
+Lemma set_remove_removes_terms : forall ufs (crem: set term) t,
+  DisjntInvar ufs -> In t crem ->
+    forall c, ~( In t c /\ In c (set_remove setterm_eq_dec crem ufs)).
+Proof.
+
+Admitted.
+
 Lemma set_union_make_class : forall l (ufs :set (set term)) a b ca cb union,
   NoDup ufs /\ EqInvar l ufs /\ DisjntInvar ufs ->
     In ca ufs /\ In a ca -> 
@@ -577,13 +584,6 @@ Lemma set_union_make_class : forall l (ufs :set (set term)) a b ca cb union,
             forall x y, In x union /\ In y union -> proof l x y.
 Proof.
   intros l ufs a b ca cb union [Hnodup [HEq Hdisj]] Hca Hcb Hprf H x y Hin.
-(*   case(setterm_eq_dec ca cb) eqn:case1.
-  - subst. unfold EqInvar in HEq. unfold set_In in *.
-    pose (T := HEq cb). apply T.
-    + destruct Hca. assumption.
-    + destruct Hin as [Hinl Hinr]. split. 
-      * apply set_union_iff in Hinl. destruct Hinl; assumption.
-      * apply set_union_iff in Hinr. destruct Hinr; assumption. *)
   Search set_union. destruct Hin as [Hxin Hyin]. About set_union_iff.
   destruct (set_union_iff term_eq_dec x ca cb) as [Tx _].
   rewrite H in *. apply Tx in Hxin.
@@ -613,8 +613,15 @@ Proof.
 Qed.
 
 
-(* Lemma set_rem_DisjntInvar : *)
-(* Add NoDup in conclusion. *)
+Lemma set_add_Eq_Disjnt : forall l (a b: term) (union: set term) ufs,
+  In a union -> In b union -> 
+    forall ca cb, ~(In a ca /\ In ca ufs) /\ ~ (In b cb /\ In cb ufs) ->
+      EqInvar l (set_add setterm_eq_dec union ufs) /\ 
+        DisjntInvar (set_add setterm_eq_dec union ufs).
+Proof.
+  
+Admitted.
+
 Theorem uf_merge_invariant : forall a b l ufs newUfs, 
   set_In (a,b) l  -> NoDup ufs -> EqInvar l ufs -> DisjntInvar ufs ->
     newUfs = uf_merge ufs a b -> 
@@ -647,7 +654,41 @@ Proof.
     unfold set_setterm_add in *. unfold set_In in *.
     remember (set_union term_eq_dec ca cb) as union.
     assert (forall x' y', In x' union /\ In y' union -> proof l x' y').
-    { admit. }
+    { apply proofAxm in Hprf. Check set_union_make_class.
+      apply (set_union_make_class l ufs a b ca cb union (conj Hnodup (conj HEq HDisj)) HA HB Hprf Hequnion).
+    }
+    
+    assert(Hina : In a union). admit. (* Easy *)
+    assert(Hinb : In b union). admit. (* Easy *)
+    
+    assert (HnotinaI2 : forall ca', ~(In a ca' /\ In ca' I2)).
+    { unfold not. intros ca' Hinca'I2. Search set_remove. (* Lets show ca = cb *)
+      assert (HcaI1 : In ca' I1).
+      { destruct Hinca'I2 as [_ T]. rewrite HeqI2 in T. About set_remove_1.
+        apply (set_remove_1 setterm_eq_dec) in T. assumption.
+      }
+      assert (HcaUfs : In ca' ufs).
+      { rewrite HeqI1 in HcaI1. apply (set_remove_1 setterm_eq_dec) in HcaI1.
+        assumption. }
+      assert (ca = ca').
+      { destruct Hinca'I2 as [Hl _]. apply (HDisj ca ca' a); unfold set_In in *;
+        destruct HA as [Tl Tr]; split; assumption.
+      }
+      (* Now let's show ca <> cb *)
+      Search set_remove. rewrite HeqI1 in HcaI1. About set_remove_2.
+      apply (set_remove_2 setterm_eq_dec) in HcaI1.
+      + symmetry in H0. contradiction.
+      + assumption.
+    }
+    
+    assert (HnotinbI2: forall cb', ~(In b cb' /\ In cb' I2)).
+    { admit. (* By symmtery from above. *)
+    }
+    
+    split.
+    + admit. (* Show NoDup is preserved by all set operations. *)
+    + rewrite H4. apply (set_add_Eq_Disjnt l a b union I2 Hina Hinb ca cb).
+      split; [ apply HnotinaI2 | apply HnotinbI2 ].
 Admitted.
 
 Fixpoint do_cc (work : set (term*term)) (ufs : set (set term)) :=
