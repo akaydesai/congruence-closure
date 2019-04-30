@@ -126,7 +126,7 @@ Inductive proof (l : set (term*term)) : term -> term -> Prop :=
   | proofAxm : forall s t, set_In (s, t) l -> proof l s t
   | proofRefl : forall t, proof l t t
   | proofSymm : forall s t, proof l s t -> proof l t s
-  | proofTrans : forall s t u, set_In (s,t) l -> proof l t u -> proof l s u.
+  | proofTrans : forall s t u, proof l s t -> proof l t u -> proof l s u.
 (*   | proofCong : forall (n : nat) s t, proof l s t -> proof l (fn n s) (fn n t). *)
 
 Fixpoint subterms (t : term) : list term :=
@@ -576,7 +576,41 @@ Lemma set_union_make_class : forall l (ufs :set (set term)) a b ca cb union,
           union = set_union term_eq_dec ca cb->
             forall x y, In x union /\ In y union -> proof l x y.
 Proof.
-Admitted.
+  intros l ufs a b ca cb union [Hnodup [HEq Hdisj]] Hca Hcb Hprf H x y Hin.
+(*   case(setterm_eq_dec ca cb) eqn:case1.
+  - subst. unfold EqInvar in HEq. unfold set_In in *.
+    pose (T := HEq cb). apply T.
+    + destruct Hca. assumption.
+    + destruct Hin as [Hinl Hinr]. split. 
+      * apply set_union_iff in Hinl. destruct Hinl; assumption.
+      * apply set_union_iff in Hinr. destruct Hinr; assumption. *)
+  Search set_union. destruct Hin as [Hxin Hyin]. About set_union_iff.
+  destruct (set_union_iff term_eq_dec x ca cb) as [Tx _].
+  rewrite H in *. apply Tx in Hxin.
+  destruct (set_union_iff term_eq_dec y ca cb) as [Ty _]. apply Ty in Hyin.
+  clear Tx Ty.
+  destruct Hxin as [Hxin | Hxin], Hyin as [Hyin | Hyin]; unfold set_In in *.
+  - unfold EqInvar in HEq. apply (HEq ca); [ destruct Hca | split ]; assumption.
+  - assert (Tab : proof l x a /\ proof l y b).
+    { destruct Hca as [HcaUfs Hcaa], Hcb as [HcbUfs Hcbb].
+      split; [ apply (HEq ca) | apply (HEq cb)]; unfold set_In; try split; assumption.
+    }
+    assert (T : proof l a y).
+    { destruct Tab as [_ Tb]. apply (proofTrans l a b y); try assumption;
+      apply proofSymm; assumption.
+    }
+    apply (proofTrans l x a y); destruct Tab; assumption.
+  - assert (Tab : proof l y a /\ proof l x b).
+    { destruct Hca, Hcb. split; [apply (HEq ca) | apply (HEq cb)];
+      unfold set_In; try split; assumption.
+    }
+    destruct Tab as [Ta Tb]. apply proofSymm in Ta.
+    assert ( T : proof l x a).
+    { apply proofSymm in Hprf. apply (proofTrans l x b a); assumption.
+    }
+    apply (proofTrans l x a y); assumption.
+  - unfold EqInvar in HEq. apply (HEq cb); [ destruct Hcb | split ]; assumption.
+Qed.
 
 
 (* Lemma set_rem_DisjntInvar : *)
@@ -613,22 +647,9 @@ Proof.
     unfold set_setterm_add in *. unfold set_In in *.
     remember (set_union term_eq_dec ca cb) as union.
     assert (forall x' y', In x' union /\ In y' union -> proof l x' y').
-    { admit. } admit.
+    { admit. }
 Admitted.
-    
-(*     destruct H6 as [x H6]. apply (H3 c1 c2).
-    + unfold uf_merge in H4. 
-      case (uf_find a ufs) eqn:case1, (uf_find b ufs) eqn:case2; try (subst; assumption).
-      exfalso. assert (T : DisjntInvar newUfs).
-      {
-        admit.
-      }
-      unfold DisjntInvar, not in T. 
-      apply (T c1 c2); try (assumption). exists x. assumption.
-    + assumption.
-    + exists x. assumption.
-Admitted.
-   *)
+
 Fixpoint do_cc (work : set (term*term)) (ufs : set (set term)) :=
   match work with
   | nil => ufs
@@ -669,14 +690,15 @@ Theorem do_cc_inv :
   forall (l: set (term * term)) (ufs: set (set term)), 
     EqInvar l ufs -> EqInvar l (do_cc l ufs).
 Proof.
-(*   intros. induction l as [| hl l' IHl'].
+  intros. induction l as [| hl l' IHl'].
   - simpl. assumption.
   - simpl in *. destruct hl as [hl1 hl2].
-    remember (uf_merge ufs hl1 hl2) as mergdl. unfold uf_merge in Heqmergdl. 
+    remember (uf_merge ufs hl1 hl2) as mergdl. 
+    
+    unfold uf_merge in Heqmergdl. 
     case (uf_find hl1 (ufs)) eqn: case1, (uf_find hl2 (ufs)) eqn: case2.
     * admit.
-    * unfold EqInvar. intros c H1. unfold EqInvar in H. apply H.
-      rewrite Heqmergdl in H1. *)
+    * rewrite Heqmergdl. (* Need inductive properties of EqInvar *)
     
 
   intros. induction ufs as [|uh ufs' IHufs'].
@@ -700,7 +722,7 @@ Proof.
   intros. induction l as [|hl l' IHl'], ufs as [|uh ufl']; try (simpl; assumption).
   - simpl. destruct hl as [hl1 hl2]. assert (uf_merge [] hl1 hl2 = []). admit.
     rewrite H0. (* Can't write Eqinvar l in terms of l', induct on ufs. *)
-  -
+  -subst; exact (conj Hnodup (conj HEq HDisj)).
   
 
   intros. 
