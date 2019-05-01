@@ -569,11 +569,15 @@ Proof.
 Qed.
 
 Lemma set_remove_removes_terms : forall ufs (crem: set term) t,
-  DisjntInvar ufs -> In t crem ->
+  NoDup ufs -> DisjntInvar ufs -> In t crem ->
     forall c, ~( In t c /\ In c (set_remove setterm_eq_dec crem ufs)).
 Proof.
-
-Admitted.
+  intros ufs crem t Hnodup HDisj Hin c. unfold not. intros H.
+  destruct H as [H1 H2].
+  (* Show c <> crem *) Search set_remove. About set_remove_2.
+  apply (set_remove_2 setterm_eq_dec) in H2.
+  (* This lemma not required. *)
+Abort.
 
 Lemma set_union_make_class : forall l (ufs :set (set term)) a b ca cb union,
   NoDup ufs /\ EqInvar l ufs /\ DisjntInvar ufs ->
@@ -614,12 +618,28 @@ Qed.
 
 
 Lemma set_add_Eq_Disjnt : forall l (a b: term) (union: set term) ufs,
-  In a union -> In b union -> 
-    forall ca cb, ~(In a ca /\ In ca ufs) /\ ~ (In b cb /\ In cb ufs) ->
-      EqInvar l (set_add setterm_eq_dec union ufs) /\ 
-        DisjntInvar (set_add setterm_eq_dec union ufs).
+  EqInvar l ufs -> DisjntInvar ufs -> 
+    In a union -> In b union -> 
+      (forall x y, In x union /\ In y union -> proof l x y) -> (* union is an Eq Class *)
+        (forall ca, ~(In a ca /\ In ca ufs)) /\ (forall cb, ~ (In b cb /\ In cb ufs)) ->
+          EqInvar l (set_add setterm_eq_dec union ufs) /\ 
+            DisjntInvar (set_add setterm_eq_dec union ufs).
 Proof.
-  
+  intros l a b union ufs HEq HDisj Hina Hinb Hunion H.
+  split; [unfold EqInvar | unfold DisjntInvar]; unfold set_In.
+  - intros c Hinc a' b' Hinab. About set_add_iff.
+    apply set_add_iff in Hinc. destruct Hinc.
+    + subst. apply Hunion. assumption.
+    + apply (HEq c); assumption.
+  - intros c1 c2 x Hinc Hinx. unfold DisjntInvar in HDisj. unfold set_In in *.
+    destruct H as [Ha Hb]; destruct Hinc as [Hincl Hincr].
+    apply set_add_iff in Hincl; apply set_add_iff in Hincr. destruct Hincl, Hincr.
+    + subst. reflexivity.
+    + apply (HDisj c1 c2 x); try assumption. split; try assumption.
+      subst. exfalso. (* goal is clearly false. *) 
+      admit.
+    + admit.
+    + 
 Admitted.
 
 Theorem uf_merge_invariant : forall a b l ufs newUfs, 
@@ -687,17 +707,30 @@ Proof.
     
     split.
     + admit. (* Show NoDup is preserved by all set operations. *)
-    + rewrite H4. apply (set_add_Eq_Disjnt l a b union I2 Hina Hinb ca cb).
-      split; [ apply HnotinaI2 | apply HnotinbI2 ].
+    + rewrite H4. destruct T2 as [T2nodup [T2Eq T2Disj]].
+      apply (set_add_Eq_Disjnt l a b union I2 T2Eq T2Disj Hina Hinb H (conj HnotinaI2 HnotinbI2)).
+(*       split; [ apply HnotinaI2 | apply HnotinbI2 ]. *)
 Admitted.
 
-Fixpoint do_cc (work : set (term*term)) (ufs : set (set term)) :=
-  match work with
+Fixpoint do_cc (l : set (term*term)) (ufs : set (set term)) :=
+  match l with
   | nil => ufs
-  | (t1, t2)::work' => do_cc work' (uf_merge ufs t1 t2)
+  | (t1, t2)::l' => do_cc l' (uf_merge ufs t1 t2)
   end.
 
 Compute do_cc [(var 1, var 2); (var 1, var 3); (var 3,var 4)] (create_ufs [(var 1, var 2); (var 1, var 3); (var 3,var 4)]).
+
+Theorem do_cc_invariant : forall l ufs newUfs, 
+  NoDup ufs /\ EqInvar l ufs /\ DisjntInvar ufs ->
+    newUfs = do_cc l ufs -> 
+      NoDup newUfs /\ EqInvar l newUfs /\ DisjntInvar newUfs.
+Proof.
+  intros l ufs newUfs. induction l as [| hl l' IHl'].
+  - intros [Hnodup [HEq HDisj]] H. simpl in *. subst. split; try split; assumption.
+  - intros [Hnodup [HEq HDisj]] H. simpl in H. 
+    destruct hl as [hl1 hl2]. 
+    (* Inductive hyp only useful if hl1 and hl2 are in same class. *)
+Admitted.
 
 Print setterm_eq_dec.
 Definition cc_algo (work : set (term*term)) (t1 t2 : term) : bool :=
