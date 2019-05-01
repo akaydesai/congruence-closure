@@ -617,30 +617,30 @@ Proof.
 Qed.
 
 
-Lemma set_add_Eq_Disjnt : forall l (a b: term) (union: set term) ufs,
+Lemma set_add_Eq_Disjnt : forall l (union: set term) ufs,
   EqInvar l ufs -> DisjntInvar ufs -> 
-    In a union -> In b union -> 
       (forall x y, In x union /\ In y union -> proof l x y) -> (* union is an Eq Class *)
-        (forall ca, ~(In a ca /\ In ca ufs)) /\ (forall cb, ~ (In b cb /\ In cb ufs)) ->
+        (forall a ca, ~(In a union /\ In a ca /\ In ca ufs)) ->
           EqInvar l (set_add setterm_eq_dec union ufs) /\ 
             DisjntInvar (set_add setterm_eq_dec union ufs).
 Proof.
-  intros l a b union ufs HEq HDisj Hina Hinb Hunion H.
+  intros l union ufs HEq HDisj Hunion H.
   split; [unfold EqInvar | unfold DisjntInvar]; unfold set_In.
   - intros c Hinc a' b' Hinab. About set_add_iff.
     apply set_add_iff in Hinc. destruct Hinc.
     + subst. apply Hunion. assumption.
     + apply (HEq c); assumption.
   - intros c1 c2 x Hinc Hinx. unfold DisjntInvar in HDisj. unfold set_In in *.
-    destruct H as [Ha Hb]; destruct Hinc as [Hincl Hincr].
+    destruct Hinc as [Hincl Hincr].
     apply set_add_iff in Hincl; apply set_add_iff in Hincr. destruct Hincl, Hincr.
     + subst. reflexivity.
     + apply (HDisj c1 c2 x); try assumption. split; try assumption.
       subst. exfalso. (* goal is clearly false. *) 
-      admit.
-    + admit.
-    + 
-Admitted.
+      apply (H x c2). destruct Hinx; split; try split; assumption.
+    + apply (HDisj c1 c2 x); try assumption. split; try assumption.
+      subst. exfalso. apply (H x c1). destruct Hinx; split; try split; assumption.
+    + apply (HDisj c1 c2 x); try assumption. split; assumption.
+Qed.
 
 Theorem uf_merge_invariant : forall a b l ufs newUfs, 
   set_In (a,b) l  -> NoDup ufs -> EqInvar l ufs -> DisjntInvar ufs ->
@@ -708,7 +708,7 @@ Proof.
     split.
     + admit. (* Show NoDup is preserved by all set operations. *)
     + rewrite H4. destruct T2 as [T2nodup [T2Eq T2Disj]].
-      apply (set_add_Eq_Disjnt l a b union I2 T2Eq T2Disj Hina Hinb H (conj HnotinaI2 HnotinbI2)).
+      apply (set_add_Eq_Disjnt l union I2 T2Eq T2Disj H (conj HnotinaI2 HnotinbI2)).
 (*       split; [ apply HnotinaI2 | apply HnotinbI2 ]. *)
 Admitted.
 
