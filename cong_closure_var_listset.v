@@ -678,39 +678,40 @@ Proof.
       apply (set_union_make_class l ufs a b ca cb union (conj Hnodup (conj HEq HDisj)) HA HB Hprf Hequnion).
     }
     
-    assert(Hina : In a union). admit. (* Easy *)
-    assert(Hinb : In b union). admit. (* Easy *)
-    
-    assert (HnotinaI2 : forall ca', ~(In a ca' /\ In ca' I2)).
-    { unfold not. intros ca' Hinca'I2. Search set_remove. (* Lets show ca = cb *)
-      assert (HcaI1 : In ca' I1).
-      { destruct Hinca'I2 as [_ T]. rewrite HeqI2 in T. About set_remove_1.
-        apply (set_remove_1 setterm_eq_dec) in T. assumption.
-      }
-      assert (HcaUfs : In ca' ufs).
-      { rewrite HeqI1 in HcaI1. apply (set_remove_1 setterm_eq_dec) in HcaI1.
-        assumption. }
-      assert (ca = ca').
-      { destruct Hinca'I2 as [Hl _]. apply (HDisj ca ca' a); unfold set_In in *;
-        destruct HA as [Tl Tr]; split; assumption.
-      }
-      (* Now let's show ca <> cb *)
-      Search set_remove. rewrite HeqI1 in HcaI1. About set_remove_2.
-      apply (set_remove_2 setterm_eq_dec) in HcaI1.
-      + symmetry in H0. contradiction.
-      + assumption.
-    }
-    
-    assert (HnotinbI2: forall cb', ~(In b cb' /\ In cb' I2)).
-    { admit. (* By symmtery from above. *)
+    assert (HnotinI2 : forall z c, ~(In z union /\ In z c /\ In c I2)).
+    { (* First show same for I1? Not true. *)
+      unfold not. intros z c [Hunion [HclassL HclassR]]. rewrite Hequnion in Hunion. 
+      apply set_union_iff in Hunion. destruct Hunion as [HunL | HunR].
+      - Search set_remove. rewrite HeqI2 in HclassR. About set_remove_1.
+        apply (set_remove_1 setterm_eq_dec c cb I1) in HclassR. 
+        rewrite HeqI1 in HclassR.
+        (* Let's show ca = c *) 
+        assert (A1: ca = c).
+        { apply (set_remove_1 setterm_eq_dec c ca ufs) in HclassR.
+          apply (HDisj ca c z); split; try destruct HA; assumption. }
+        (* Now derive contradiction to A1 *)
+        About set_remove_2. 
+        apply (set_remove_2 setterm_eq_dec) in HclassR; try assumption.
+        symmetry in A1. contradiction.
+      - rewrite HeqI2 in HclassR.
+        assert (A2: c = cb).
+        { apply (set_remove_1 setterm_eq_dec c cb I1) in HclassR.
+          rewrite HeqI1 in HclassR.
+          apply (set_remove_1 setterm_eq_dec c ca ufs) in HclassR.
+          apply (HDisj c cb z); split; try destruct HB; assumption. }
+        (* Show c <> cb *)
+        About set_remove_2. destruct T1 as [T1nodup T1rest].
+        apply (set_remove_2 setterm_eq_dec T1nodup) in HclassR.
+        contradiction.
     }
     
     split.
-    + admit. (* Show NoDup is preserved by all set operations. *)
+    + (* Show NoDup is preserved by all set operations. *)
+      rewrite H4. Search set_add. apply (set_add_nodup setterm_eq_dec).
+      destruct T2 as [T2nodup T2rest]; assumption.
     + rewrite H4. destruct T2 as [T2nodup [T2Eq T2Disj]].
-      apply (set_add_Eq_Disjnt l union I2 T2Eq T2Disj H (conj HnotinaI2 HnotinbI2)).
-(*       split; [ apply HnotinaI2 | apply HnotinbI2 ]. *)
-Admitted.
+      apply (set_add_Eq_Disjnt l union I2 T2Eq T2Disj H HnotinI2).
+Qed.
 
 Fixpoint do_cc (l : set (term*term)) (ufs : set (set term)) :=
   match l with
