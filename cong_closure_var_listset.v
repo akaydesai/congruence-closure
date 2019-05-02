@@ -129,6 +129,15 @@ Inductive proof (l : set (term*term)) : term -> term -> Prop :=
   | proofTrans : forall s t u, proof l s t -> proof l t u -> proof l s u.
 (*   | proofCong : forall (n : nat) s t, proof l s t -> proof l (fn n s) (fn n t). *)
 
+Lemma proof_monotonic : forall h l a b, proof l a b -> proof (h::l) a b.
+Proof.
+  intros h l a b Hprf. induction Hprf.
+  - apply proofAxm. simpl. right. assumption.
+  - apply proofRefl.
+  - apply proofSymm. assumption.
+  - apply (proofTrans (h::l) s t u); assumption.
+Qed.
+
 Fixpoint subterms (t : term) : list term :=
   match t with
   | var n => [var n]
@@ -721,16 +730,74 @@ Fixpoint do_cc (l : set (term*term)) (ufs : set (set term)) :=
 
 Compute do_cc [(var 1, var 2); (var 1, var 3); (var 3,var 4)] (create_ufs [(var 1, var 2); (var 1, var 3); (var 3,var 4)]).
 
+(* Lemma EqInvar_emp : forall a l, ~ EqInvar (a::l) [].  ??? *)
+
+Lemma uf_merge_emp : forall a b, uf_merge [] a b = [].
+Proof. intros. unfold uf_merge. simpl. reflexivity. Defined.
+
+Lemma do_cc_emp : forall l, do_cc l [] = [].
+Proof.
+  intros. induction l.
+  - simpl. reflexivity.
+  - simpl. destruct a. rewrite uf_merge_emp. assumption.
+Defined.
+
+Lemma EqInvar_monotonic: forall x y l ufs, EqInvar l ufs -> EqInvar ((x,y)::l) ufs.
+Proof.
+Admitted.
+
+Lemma EqInvar_noclass_equiv: forall x y l ufs,
+  uf_find x ufs = None \/ uf_find y ufs = None ->
+    EqInvar ((x,y)::l) ufs <-> EqInvar l ufs.
+Proof.
+  intros x y l ufs Hnotin. split.
+  - intros HEq. Search uf_find. 
+    unfold EqInvar; unfold set_In in *. 
+    intros c Hinc a b [Hina Hinb]. 
+(*     unfold EqInvar in HEq; unfold set_In in HEq. *)
+    assert(H: proof ((x, y) :: l) a b). admit.
+    induction H. (* Dependency on definition of proof!! *)
+    + unfold set_In in H; simpl in H. destruct H.
+      * symmetry in H. inversion H. subst. exfalso. 
+        destruct Hnotin as [Hnotinx | Hnotiny].
+        { destruct (uf_find_none_sound_complete x ufs) as [Tx _].
+          pose (Hx := Tx Hnotinx). apply (Hx c). split; assumption. }
+        { destruct (uf_find_none_sound_complete y ufs) as [Ty _].
+          pose (Hy := Ty Hnotiny). apply (Hy c). split; assumption. }
+      * apply proofAxm; assumption.
+    + apply proofRefl.
+    + apply proofSymm. apply IHproof; assumption.
+    + destruct Hnotin as [Hnotinx | Hnotiny].
+      * { destruct (uf_find_none_sound_complete x ufs) as [Tx _].
+        assert (HP: proof ((x, y) :: l) s u). admit.
+        (* Crap!! *) admit. }
+      * admit.
+  - apply EqInvar_monotonic.
+Admitted.
+
 Theorem do_cc_invariant : forall l ufs newUfs, 
   NoDup ufs /\ EqInvar l ufs /\ DisjntInvar ufs ->
     newUfs = do_cc l ufs -> 
       NoDup newUfs /\ EqInvar l newUfs /\ DisjntInvar newUfs.
 Proof.
+(*   intros l ufs newUfs [Hnodup [HEq HDisj]] Hnew. induction l as [| hl l' IHl].
+  - simpl in *. subst. split; try split; assumption.
+  - destruct hl as [hl1 hl2]. *)
+
   intros l ufs newUfs. induction l as [| hl l' IHl'].
-  - intros [Hnodup [HEq HDisj]] H. simpl in *. subst. split; try split; assumption.
-  - intros [Hnodup [HEq HDisj]] H. simpl in H. 
+  - intros [Hnodup [HEq HDisj]] Hnew. simpl in *. subst. split; try split; assumption.
+  - intros [Hnodup [HEq HDisj]] Hnew. simpl in Hnew. 
     destruct hl as [hl1 hl2]. 
-    (* Inductive hyp only useful if hl1 and hl2 are in same class. *)
+    (* Inductive hyp only useful(?) if hl1 and hl2 are in same class, 
+       else newUfs = ufs; and we need inductive properties of EqInvar. *)
+    unfold uf_merge in Hnew. 
+    case (uf_find hl1 ufs) eqn:case1, (uf_find hl2 ufs) eqn:case2;
+    try rename s into chl1, s0 into chl2.
+    + admit.
+    (* Missing out on the fact that during do_cc, uf_find will never return none. *)
+    + admit.
+    + admit.
+    + Print EqInvar.
 Admitted.
 
 Print setterm_eq_dec.
@@ -749,63 +816,3 @@ Definition cc_algo (work : set (term*term)) (t1 t2 : term) : bool :=
   end.
 Compute cc_algo [(var 1, var 2); (var 1, var 3); (var 3,var 4)] (var 2) (var 4).
 
-(* Lemma EqInvar_emp : forall a l, ~ EqInvar (a::l) [].  ??? *)
-
-Lemma uf_merge_emp : forall a b, uf_merge [] a b = [].
-Proof. intros. unfold uf_merge. simpl. reflexivity. Defined.
-
-Lemma do_cc_emp : forall l, do_cc l [] = [].
-Proof.
-  intros. induction l.
-  - simpl. reflexivity.
-  - simpl. destruct a. rewrite uf_merge_emp. assumption.
-Defined.
-
-Theorem do_cc_inv : 
-  forall (l: set (term * term)) (ufs: set (set term)), 
-    EqInvar l ufs -> EqInvar l (do_cc l ufs).
-Proof.
-  intros. induction l as [| hl l' IHl'].
-  - simpl. assumption.
-  - simpl in *. destruct hl as [hl1 hl2].
-    remember (uf_merge ufs hl1 hl2) as mergdl. 
-    
-    unfold uf_merge in Heqmergdl. 
-    case (uf_find hl1 (ufs)) eqn: case1, (uf_find hl2 (ufs)) eqn: case2.
-    * admit.
-    * rewrite Heqmergdl. (* Need inductive properties of EqInvar *)
-    
-
-  intros. induction ufs as [|uh ufs' IHufs'].
-  - rewrite do_cc_emp. assumption.
-  - induction l as [| hl l' IHl'].
-    + simpl in *. assumption.
-    + (* Show prop of EqInvar WRT ufs. ie. From "EqInvar (hl::l') (uh::ufs')" follows: *)
-    assert (EqInvar (hl::l') ufs'). admit.
-    (* Now, how do you write "do_cc l (uh::ufs')" into "do_cc l ufs'" *)
-    simpl in *. destruct hl as [hl1 hl2]. (* Need case on uh = find(hl1 or hl2) *)
-(*     remember (uf_merge (uh :: ufs') hl1 hl2) as H_merg. *)
-    unfold uf_merge.
-    case (uf_find hl1 (uh::ufs')) eqn: case1, (uf_find hl2 (uh::ufs')) eqn: case2.
-      * unfold set_setterm_add. admit.
-        (* Damn *) 
-      * apply.
-    
-
-
-
-  intros. induction l as [|hl l' IHl'], ufs as [|uh ufl']; try (simpl; assumption).
-  - simpl. destruct hl as [hl1 hl2]. assert (uf_merge [] hl1 hl2 = []). admit.
-    rewrite H0. (* Can't write Eqinvar l in terms of l', induct on ufs. *)
-  -subst; exact (conj Hnodup (conj HEq HDisj)).
-  
-
-  intros. 
-  induction l as [|hl l' IHl'].
-(*     destruct l as [| hl l']. *)
-  - unfold do_cc. assumption.
-  - simpl in *. destruct hl as [hl1 hl2]. (* We have 'proof l hl1 hl2' *)
-    assert (proof ((hl1,hl2)::l') hl1 hl2). admit.
-    unfold EqInvar in *. intros. apply (H c). 
-    + 
-    + assumption.
