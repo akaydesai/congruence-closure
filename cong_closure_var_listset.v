@@ -291,6 +291,9 @@ Definition DisjntInvar (ufs: set (set term)) :=
     set_In c1 ufs /\ set_In c2 ufs ->
       set_In x c1 /\ set_In x c2 -> c1 = c2.
 (* Third invariant is NoDup ufs. *)
+Definition ContainInvar (l: set (term*term)) (ufs: set (set term)) :=
+  forall t1 t2, In (t1, t2) l -> 
+    exists ct1 ct2,  (In t1 ct1 /\ In ct1 ufs) /\ (In t2 ct2 /\ In ct2 ufs).
 (* ------------ ------------ *)
 
 Check set_mem term_eq_dec.
@@ -625,7 +628,6 @@ Proof.
   - unfold EqInvar in HEq. apply (HEq cb); [ destruct Hcb | split ]; assumption.
 Qed.
 
-
 Lemma set_add_Eq_Disjnt : forall l (union: set term) ufs,
   EqInvar l ufs -> DisjntInvar ufs -> 
       (forall x y, In x union /\ In y union -> proof l x y) -> (* union is an Eq Class *)
@@ -780,10 +782,6 @@ Theorem do_cc_invariant : forall l ufs newUfs,
     newUfs = do_cc l ufs -> 
       NoDup newUfs /\ EqInvar l newUfs /\ DisjntInvar newUfs.
 Proof.
-(*   intros l ufs newUfs [Hnodup [HEq HDisj]] Hnew. induction l as [| hl l' IHl].
-  - simpl in *. subst. split; try split; assumption.
-  - destruct hl as [hl1 hl2]. *)
-
   intros l ufs newUfs. induction l as [| hl l' IHl'].
   - intros [Hnodup [HEq HDisj]] Hnew. simpl in *. subst. split; try split; assumption.
   - intros [Hnodup [HEq HDisj]] Hnew. simpl in Hnew. 
@@ -794,7 +792,9 @@ Proof.
     case (uf_find hl1 ufs) eqn:case1, (uf_find hl2 ufs) eqn:case2;
     try rename s into chl1, s0 into chl2.
     + admit.
-    (* Missing out on the fact that during do_cc, uf_find will never return none. *)
+    (* Need EqInvar_noclass_equiv for the other 3 cases. *)
+    (* Missing out on the fact that during do_cc, uf_find will never return none.
+        Add this to thm statement and we can dispose off the 3 cases. *)
     + admit.
     + admit.
     + Print EqInvar.
