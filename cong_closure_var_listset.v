@@ -746,7 +746,11 @@ Defined.
 
 Lemma EqInvar_monotonic: forall x y l ufs, EqInvar l ufs -> EqInvar ((x,y)::l) ufs.
 Proof.
-Admitted.
+  intros. unfold EqInvar in *. intros.
+  assert(T: proof l a b).  (* Dependency on definition of proof!! *)
+  { pose (H c H0 a b H1). assumption. }
+  apply proof_monotonic. assumption.
+Qed.
 
 Lemma EqInvar_noclass_equiv: forall x y l ufs,
   uf_find x ufs = None \/ uf_find y ufs = None ->
@@ -769,8 +773,8 @@ Proof.
       * apply proofAxm; assumption.
     + apply proofRefl.
     + apply proofSymm. apply IHproof; assumption.
-    + destruct Hnotin as [Hnotinx | Hnotiny].
-      * { destruct (uf_find_none_sound_complete x ufs) as [Tx _].
+    + destruct Hnotin as [Hnotinx | Hnotiny]. 
+      * { destruct (uf_find_none_sound_complete x ufs) as [Tx _]. unfold set_In in *.
         assert (HP: proof ((x, y) :: l) s u). admit.
         (* Crap!! *) admit. }
       * admit.
