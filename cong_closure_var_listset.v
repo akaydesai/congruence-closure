@@ -761,7 +761,8 @@ Proof.
     unfold EqInvar; unfold set_In in *. 
     intros c Hinc a b [Hina Hinb]. 
 (*     unfold EqInvar in HEq; unfold set_In in HEq. *)
-    assert(H: proof ((x, y) :: l) a b). admit.
+    assert(H: proof ((x, y) :: l) a b). 
+    { unfold EqInvar in HEq. apply (HEq c); [assumption | split; assumption]. }
     induction H. (* Dependency on definition of proof!! *)
     + unfold set_In in H; simpl in H. destruct H.
       * symmetry in H. inversion H. subst. exfalso. 
@@ -775,8 +776,12 @@ Proof.
     + apply proofSymm. apply IHproof; assumption.
     + destruct Hnotin as [Hnotinx | Hnotiny]. 
       * { destruct (uf_find_none_sound_complete x ufs) as [Tx _]. unfold set_In in *.
-        assert (HP: proof ((x, y) :: l) s u). admit.
-        (* Crap!! *) admit. }
+        assert (HP: proof ((x, y) :: l) s u). 
+(*         { unfold EqInvar in HEq. apply (HEq c); [assumption | split; assumption]. } *)
+        { About proofTrans. apply (proofTrans ((x,y)::l) s t u); assumption. }
+        (* Need 'proof l u c' or goal directly. Show 'uf_find x ufs = None -> EqInvar (x,y)::l ufs'? *)
+          admit.
+        }
       * admit.
   - apply EqInvar_monotonic.
 Admitted.
@@ -820,3 +825,27 @@ Definition cc_algo (work : set (term*term)) (t1 t2 : term) : bool :=
   end.
 Compute cc_algo [(var 1, var 2); (var 1, var 3); (var 3,var 4)] (var 2) (var 4).
 
+Lemma create_ufs_no_emp: forall l, ~ set_In (create_ufs l) [].
+Proof.
+ unfold not. intros l Hin. simpl in Hin. assumption.
+Qed.
+
+Lemma create_ufs_invariant: forall l,
+  NoDup (create_ufs l) /\ EqInvar l (create_ufs l) /\ DisjntInvar (create_ufs l).
+
+Theorem cc_algo_sound_complete: forall l t1 t2,
+ cc_algo l t1 t2 = true <-> proof l t1 t2.
+Proof.
+  intros. split.
+  1:{
+  intros Hcc. unfold cc_algo in Hcc. remember (create_ufs l) as iufs.
+  remember (uf_find t1 (do_cc l iufs)) as T1. remember (uf_find t2 (do_cc l iufs)) as T2.
+  destruct T1 as [r1|]; destruct T2 as [r2|]; try (apply diff_false_true in Hcc; exfalso; assumption).
+  - Search "setterm_eq_dec". 
+    case r1,r2; simpl in *; try (apply diff_false_true in Hcc; exfalso; assumption).
+    + clear Hcc. (* contradict HeqT1 or HeqT2.
+     Since, create_ufs does not add [] to ufs; do_cc preserves that. *)
+      admit.
+    + admit.
+  }
+Admitted.
