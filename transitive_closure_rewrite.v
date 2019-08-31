@@ -9,6 +9,7 @@ Require Import Coq.Arith.PeanoNat.
 
 Require Import Coq.Bool.Bool. 
 
+(* term is Type instead of Set so we can use sigma *)
 Inductive term : Set :=
   | var : nat -> term.
 
@@ -131,21 +132,27 @@ Qed.
 (* Why cant member of subtype(t) be used instead of term?
  We use option instead of this definition so that we need not add query terms to ufm.
  *)
+ 
+Locate "==".
 
-Definition Occurs (t: term) (eql: list (term*term)) := 
+Definition Occurs (eql: list (term*term)) (t: term) := 
   exists x, In (t,x) eql \/ In (x,t) eql.
+
+Check Occurs [].
+Example test: (Occurs [(var 1, var 2)] (var 2)).
+Proof. unfold Occurs. exists (var 1). simpl. right. left; reflexivity. Qed.
 
 Definition mapRep (R: Type) := term -> option R.
 
 (* Well-formed Map *)
 Definition WFM (eql: list (term*term)) (R: Type) : mapRep R -> Prop := 
   fun ufm =>
-    (forall t, exists r, ufm t = Some r <-> Occurs t eql) /\ 
-      (forall t, ufm t = None <-> ~ Occurs t eql) /\
+(*     (forall t, exists r, ufm t = Some r <-> Occurs eql t) /\  *)
+(*       (forall t, ufm t = None <-> ~ Occurs eql t) /\ *)
         (forall t1 t2, ufm t1 = ufm t2 -> proof eql t1 t2).
 
-Theorem WFM_is_strong: forall eql R (ufm: mapRep R) t, 
-  (exists r, ufm t = Some r <-> Occurs t eql) -> (ufm t = None <-> ~ Occurs t eql).
+Theorem WFM_is_strong: forall (eql: list (term* term)) R (ufm: mapRep R) t, 
+  (exists r, ufm t = Some r <-> Occurs eql t) -> (ufm t = None <-> ~ Occurs eql t).
 Proof.
   intros. split.
   - intros. unfold not. intros. destruct H as [r [Ha Hb]]. apply Hb in H1.
@@ -156,11 +163,103 @@ Proof.
     admit.
 Admitted.
 
-Definition mergeType {R} eql : 
-  ({ m:mapRep R | WFM eql R m }) -> ({ m:mapRep R | WFM eql R m }).
+Lemma proof_implies_occurence: forall l a b, 
+  l <> [] /\ proof l a b -> Occurs l a /\ Occurs l b.
+Proof.
+  intros l a b [Hemp ]. induction l as [ | h l' IHl'].
+  - induction H.
+    + inversion H.
+    + (* proof [] t t -/> Occurs, hence Hemp constraint *)
+      contradiction.
+    + destruct IHproof; unfold Occurs in *. split;
+      [ destruct H0 as [x [Ha | Hb]] | destruct H0 as [x [Ha | Hb]] ];
+      try inversion Ha; try inversion Hb.
+    + exfalso. destruct IHproof1. unfold Occurs in H1. destruct H1 as [x []];
+      simpl in H1; contradiction.
+  - induction H.
+  
+Admitted.
 
-Fixpoint do_tc {R} (eql: list (term*term)) (ufm: mapRep R) := 
-  match eql with
-  | [] => ufm
-  | (t1, t2)::eql' => do_tc eql' (merge ufm t1 t2)
-  end.
+(* Dummy merge for now *)
+(* Definition merge {R} eql : 
+  { eq : term*term | proof eql (fst eq) (snd eq) } -> 
+(*     Occurs (fst eq) eql /\ Occurs (snd eq) eql } ->  *)
+      ({ m: mapRep R | WFM eql R m }) -> ({ m: mapRep R | WFM eql R m }). 
+(*       :=  
+      (* Add correctness to return type? How? 
+         This will cause type problems in do_tc, since we don't have subtyping. *)
+        fun eq m => m. *) *)
+
+(* From mathcomp Require Import ssreflect ssrfun ssrbool eqtype. *)
+Locate "<:".
+(* Check subType. *)
+
+(* Here we go, can't type a b. No subtyping, lets use projections. *)
+(* Maybe we don't need Occurs for merge *)
+Definition merge {R} eql 
+(a b:{t : term | Occurs eql t}) (Hpf: proof eql (proj1_sig a) (proj1_sig b)) :
+    ({ m: mapRep R | WFM eql R m }) -> 
+      ({ m: mapRep R | WFM eql R m /\ m (proj1_sig a) = m (proj1_sig b) }).
+Admitted.
+(* But now we need to recover map of type { m:mapRep R | WFM } for use by do_tc. 
+   How?
+   Take proj2 to get proofs and recover fst proof and build back sig type over mapRep.
+   FML! *)
+
+Lemma aux1 : forall l x y, Occurs ((x,y)::l) x. (* /\ Occurs ((x,y)::l) y. *)
+Proof.
+  intros. unfold Occurs. (* split. *)
+  - exists y. simpl. repeat left. reflexivity.
+(*   - exists x. simpl. right. left. reflexivity. *)
+Defined.
+
+(* Restrict to nonempty eql?, otherwise problems due to "forall t, proof [] t t"*)
+(* Proving completeness is also an issue due to "forall t, proof [] t t", 
+   Is there any way to solve this that does not involve adding query terms to do_cc?
+   How about a 3-valued option type? Nah! Why complicate further! 
+   Modify Occurs to include query terms? *)
+(* Need to assert that l is a part of eql? Suffix maybe, incl is weaker. *)
+Search "sub".
+
+(* a is suffix of b *)
+Definition suffix {A} (a b: list A) := exists c, b = c ++ a.
+
+Lemma suffix_antimon : forall A (a:A) (l1 l2: list A), 
+  suffix (a::l1) l2 -> suffix l1 l2.
+Proof.
+  intros. destruct H. Search "_ ++ _".
+Admitted.
+
+Check sig (Occurs []).
+Check exist (Occurs []).
+Search list.
+(* Check sig term. *) 
+(* Alternate design, use two lists, one as accumulator of processed eqs; but this doesn't extend to cong closure; where we find fixpoint of ufm(Check with Manna). *)
+
+(* Remove Occurs from merge, How do you do that without needing to add query terms?
+   Well, lets ignore query terms for now and only show soundness and completeness for do_tc. *)
+Fixpoint do_tc {R} (eql: list (term*term)) (l: {k: list (term*term) | suffix k eql}) :
+    {m: mapRep R | WFM eql R m} -> 
+      {m: mapRep R | WFM eql R m /\ forall a b, In (a,b) (proj1_sig l) -> m a = m b}.
+Proof.
+intros. destruct l as [l Hpf].
+simpl in *. destruct X as [x w]. induction l as [ | hl l' IHl'].
+- simpl. assert (F : forall (a b:term), False -> x a = x b). 
+  { intros. exfalso. assumption. } exists x. split; assumption.
+- clear do_tc. apply suffix_antimon in Hpf. (* Make copy of Hpf before both apply. *)
+  apply IHl' in Hpf. clear IHl'. destruct Hpf as [m' [HWFM Htc]].
+  (* Now use merge to build goal. *)
+  Check merge.
+
+(*    :=
+  fun l ufm => 
+    match l with
+    | [] => ufm
+    | (t1, t2)::l' => let a := exist (fun t1 => aux1 l' t1 t2) in
+(*                       let a := ((exist (Occurs eql)) t1)  in *)
+                      let b := sig (Occurs eql) in
+                      let merged := (merge eql a b ufm) in
+                      let wfm := proj1 (proj1_sig merged) in
+(*                       let prf := proj1 (proj2_sig merged) in *)
+                        do_tc eql l' wfm
+    end. *)

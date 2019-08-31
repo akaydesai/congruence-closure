@@ -724,6 +724,7 @@ Proof.
       apply (set_add_Eq_Disjnt l union I2 T2Eq T2Disj H HnotinI2).
 Qed.
 
+(* This is actually do_tc, as it only does transitive closure for now *)
 Fixpoint do_cc (l : set (term*term)) (ufs : set (set term)) :=
   match l with
   | nil => ufs
@@ -830,22 +831,87 @@ Proof.
  unfold not. intros l Hin. simpl in Hin. assumption.
 Qed.
 
+Lemma emp_no_proof: forall a b, a <> b -> ~(proof [] a b).
+Proof.
+  unfold not. intros a b H Hprf. 
+  induction Hprf; simpl in *;try assumption.
+  - apply H; reflexivity. 
+  - apply IHHprf. intros. subst. apply H. reflexivity.
+  - apply IHHprf1. intros. subst. apply IHHprf2. intros. subst. apply H. reflexivity.
+Qed.
+
 Lemma create_ufs_invariant: forall l,
   NoDup (create_ufs l) /\ EqInvar l (create_ufs l) /\ DisjntInvar (create_ufs l).
+Proof. Admitted.
 
 Theorem cc_algo_sound_complete: forall l t1 t2,
  cc_algo l t1 t2 = true <-> proof l t1 t2.
 Proof.
   intros. split.
+(*   1:{ intros Ht. unfold cc_algo in Ht. remember (create_ufs l) as iufs.
+  induction iufs as [|ih iufs' IHiu].
+    - induction l as [|h l' IHl'].
+      + simpl in *. apply diff_false_true in Ht; exfalso; assumption.
+      + admit.
+    -
+      
   1:{
   intros Hcc. unfold cc_algo in Hcc. remember (create_ufs l) as iufs.
   remember (uf_find t1 (do_cc l iufs)) as T1. remember (uf_find t2 (do_cc l iufs)) as T2.
   destruct T1 as [r1|]; destruct T2 as [r2|]; try (apply diff_false_true in Hcc; exfalso; assumption).
-  - Search "setterm_eq_dec". 
-    case r1,r2; simpl in *; try (apply diff_false_true in Hcc; exfalso; assumption).
+  - Search "setterm_eq_dec". admit.
+  
+  (* Alt 1 *)
+    induction r1,r2; try (apply diff_false_true in Hcc; exfalso; assumption).
+    + simpl in *. clear Hcc. admit. (* See note in orig *)
+    + admit.
+  
+  (* Orig *)
+    case r1 eqn:Er1, r2 eqn: Er2; simpl in *; try (apply diff_false_true in Hcc; exfalso; assumption).
     + clear Hcc. (* contradict HeqT1 or HeqT2.
      Since, create_ufs does not add [] to ufs; do_cc preserves that. *)
       admit.
-    + admit.
-  }
+    + rewrite <- Er1 in *. rewrite <- Er2 in *.
+  } *)
+
+  2:{ induction l as [| h l' IHl'].
+    - intros. (*Show forall a b: ~ H *) destruct H.
+      + simpl in H. exfalso. assumption.
+      + unfold cc_algo. simpl. 
+    - intros Hprf. induction Hprf.
+      + unfold set_In in H. simpl in H. destruct H as [Hl| Hr].
+        * { subst. unfold cc_algo. remember (create_ufs ((s,t)::l')) as iufs. 
+          remember (do_cc ((s,t)::l') iufs) as newUfs.
+          assert(T: NoDup newUfs /\ EqInvar ((s,t)::l') newUfs /\ DisjntInvar newUfs). admit.
+          case (uf_find s newUfs) as [rs|] eqn:cases, (uf_find t newUfs) as [rt|] eqn:caset.
+          - admit.
+          - apply (uf_find_some_sound_complete s rs newUfs) in cases;
+            destruct T as [TDup [TEq TDisj]]; try assumption.
+            (* Need completeness of do_cc. Stated how exactly? *)
+            (* Need proof l' s t -> do_cc ((s,t)::l') *)
+      
+      
+  
+  
+  2:{ intros Hprf. induction Hprf.
+    - unfold set_In in *. 
+      induction l as [|h l' IHl']; try contradiction.
+      unfold cc_algo. remember (create_ufs (h::l')) as iufs. 
+      remember (do_cc (h::l') iufs) as newUfs.
+      assert(T: NoDup newUfs /\ EqInvar (h::l') newUfs /\ DisjntInvar newUfs). admit.
+      simpl In in H. destruct H as [Hl | Hr].
+      + case (uf_find s newUfs) as [rs|] eqn:cases, (uf_find t newUfs) as [rt|] eqn:caset.
+        * admit.
+        * exfalso. rewrite Hl in *. 
+(*           assert(HEq: proof ((s,t)::l') s t). 
+          { apply proofAxm. simpl. left. reflexivity. } *)
+          destruct T as [TDup [TEq TDisj]].
+          (* Derive contradiction from TEq and case eqn correctness. Wait..how???*)
+          Search "uf_find_some_sound_complete".
+          apply (uf_find_some_sound_complete s rs newUfs) in cases; try assumption.
+          Search "uf_find_none_sound_complete".
+          pose (P := uf_find_none_sound_complete t newUfs). destruct P as [P' _].
+          pose (P := P' caset).
+          unfold EqInvar in TEq. 
+
 Admitted.
