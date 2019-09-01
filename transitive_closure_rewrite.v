@@ -206,8 +206,11 @@ Definition merge R eql
 (a b:{t : term | Occurs eql t}) (Hpf: proof eql (proj1_sig a) (proj1_sig b))
   (ufm: { m: mapRep R | WFM eql R m }) :
       ({ m: mapRep R | WFM eql R m /\ 
-        forall x, (proj1_sig ufm) x = (proj1_sig ufm) (proj1_sig a) -> 
-          m x = m (proj1_sig b) }).
+        (forall x, (proj1_sig ufm) x = (proj1_sig ufm) (proj1_sig a) -> 
+                    m x = (proj1_sig ufm) (proj1_sig b)) /\ 
+                    (* Stronger: RHS above = (proj1_sig ufm) b, but this is implied by next conjunct, so let's explicity say it anyways instead of m (proj1_sig b) *)
+          (forall x, (proj1_sig ufm) x <> (proj1_sig ufm) (proj1_sig a) ->
+                    (proj1_sig ufm) x = m x) } ).
 Admitted.
 (* But now we need to recover map of type { m:mapRep R | WFM } for use by do_tc. 
    How?
@@ -269,7 +272,8 @@ Fixpoint do_tc {R} (eql: list (term*term)) (l: {k: list (term*term) | suffix k e
     {m: mapRep R | WFM eql R m} -> 
       {m: mapRep R | WFM eql R m /\ forall a b, proof (proj1_sig l) a b -> m a = m b}.
 Proof.
-intros. destruct l as [l Hpf].
+intros. destruct l as [l Hpf]. 
+  (* X as [x W] is the input map to the original do_tc call. *)
 simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
 - simpl. assert (F : forall (a b:term), False -> x a = x b). 
   { intros. exfalso. assumption. } exists x. split; try assumption.
@@ -280,27 +284,55 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   + apply emp_proof_eq in H. apply emp_proof_eq in H0. subst. reflexivity.
 - clear do_tc. assert(HPf := Hpf). apply suffix_antimon in Hpf. 
   rename Hpf into Hpf'. assert(Hres := Hpf').
-  apply IHl' in Hres. clear IHl'. destruct Hres as [m' [HWFM Htc]].
-  (* Seperate proof, combine later, after merge. *)
-  (* Now use merge to build goal. *)
+  (* Hres is the result of recursive call to do_tc, m' is the corresponding MapRep. *)
+  apply IHl' in Hres. clear IHl'. destruct Hres as [m' [Hm'WFM Hm'tc]].
+  (* Now use merge to build goal. That's why we did destruct Hres. So we can call merge.
+  Show that m' and result of merge differ only in the case where the equiv class of a is concerned. *)
   assert(H1 : Occurs ((hl1,hl2)::l') hl1).
   { unfold Occurs. exists hl2. simpl. repeat left; reflexivity. }
   assert(H2 : Occurs ((hl1,hl2)::l') hl2).
   { unfold Occurs. exists hl1. simpl. right. left; reflexivity. }
   (* Use Occurs monotonic, to prove asserts. *)
-  assert(h1' : Occurs eql hl1). { admit. } clear H1.
-  assert(h2' : Occurs eql hl2). { admit. } clear H2.
+  assert(h1' : Occurs eql hl1). { admit. } clear H1. (* Easy *)
+  assert(h2' : Occurs eql hl2). { admit. } clear H2. (* Easy *)
   Check exist. pose(E1 := exist (Occurs eql)). 
   assert(H1:=h1'). assert(H2:=h2').
   apply E1 in h1'. apply E1 in h2'. clear E1.
-  assert(A1 : proof eql (proj1_sig h1') (proj1_sig h2')). { admit. }
-  pose(E2 := exist (WFM eql R)). apply E2 in W. clear E2.
-  pose (C := merge R eql h1' h2' A1 W). (* Had to make param R of merge explicit. *)
-  (* W here is the result of recursive call to do_tc. *)
-  destruct C as [M [HM1 HM2]]. (* M. the result of merge, is our witness. *)
-  (* We need that merge does not touch other classes? coz we need that M satisfies Htc like m'.  *)
+  assert(A1 : proof eql (proj1_sig h1') (proj1_sig h2')). { admit. } (* Easy *)
+  pose(E2 := exist (WFM eql R)). apply E2 in Hm'WFM. clear E2.
+  pose (C := merge R eql h1' h2' A1 Hm'WFM). (* Had to make param R of merge explicit. *)
+  (* C, the result of merge, is our witness. *)
+   destruct C as [M [HMpf [HM1 HM2]]].
+  (* But, in constructing M, we have lost the information that it was created by modifying m'. Hence Hm'tc is useless, since we can't recover m' from HM1 and HM2. If we could... *)
+  assert(recov1: m' = proj1_sig Hm'WFM). { admit. } 
+(*   rewrite <- recov1 in HM1. *)
+  assert(mergProp1 : forall x, m' x = m' hl1 -> M x = m' hl2).
+  { admit. }
+    assert(mergProp2 : forall x, m' x <> m' hl1 -> M x = m' x).
+  { admit. }
+  (* ...then we can show. Maybe use the fact that classes don't split. *)
+  assert(HMrecPf : forall a b : term, proof l' a b -> M a = M b).
+  { admit. }
+  (* We need to use HMrecPf, A1 to derive Goal by induction on proof(refer whiteboard)
+     Do case analysis based on antecedent of mergProps? Don't see how that would help.
+      *)
+  assert(Hfinal : forall a b, proof ((hl1, hl2)::l') a b -> M a = M b).
+  {
+    clear HM1; clear HM2.
+    intros. induction H.
+    - simpl in H. destruct H.
+      + inversion H. rewrite <- H3; rewrite <- H4. clear H; clear H3; clear H4.
+        (* Use correctness of merge, which might need fixing. *)
+        admit.
+      + (* Use mergProp1 and Hm'tc *)
+        admit.
+    - reflexivity.
+    - symmetry; assumption.
+    - rewrite IHproof2 in IHproof1. assumption.
+  }
+  (* Need sig2 to construct witness? *)
   
-
+Admitted.
 (*    :=
   fun l ufm => 
     match l with
