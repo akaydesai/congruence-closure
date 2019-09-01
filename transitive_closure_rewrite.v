@@ -138,6 +138,10 @@ Locate "==".
 Definition Occurs (eql: list (term*term)) (t: term) := 
   exists x, In (t,x) eql \/ In (x,t) eql.
 
+(* Inductive Occurs (eql: list (term*term)) (t: term) := 
+  | left : (exists x, In (t,x) eql) -> Occurs eql t
+  | right : (exists x, In (x,t) eql -> Occurs eql t. *)
+
 Check Occurs [].
 Example test: (Occurs [(var 1, var 2)] (var 2)).
 Proof. unfold Occurs. exists (var 1). simpl. right. left; reflexivity. Qed.
@@ -197,7 +201,8 @@ Locate "<:".
 (* Here we go, can't type a b. No subtyping, lets use projections. *)
 (* Maybe we don't need Occurs for merge *)
 (* Cross-check this definition with the correctness condition on whiteboard. *)
-Definition merge {R} eql 
+Definition merge R eql 
+(* R had to be explicit o/w type cannot be inferred in proof of do_tc *)
 (a b:{t : term | Occurs eql t}) (Hpf: proof eql (proj1_sig a) (proj1_sig b))
   (ufm: { m: mapRep R | WFM eql R m }) :
       ({ m: mapRep R | WFM eql R m /\ 
@@ -259,12 +264,13 @@ Search list.
 
 (* Remove Occurs from merge, How do you do that without needing to add query terms?
    Well, lets ignore query terms for now and only show soundness and completeness for do_tc. *)
+(* Inducting on eql without keeping a copy should be sufficient for tc.(?) *)
 Fixpoint do_tc {R} (eql: list (term*term)) (l: {k: list (term*term) | suffix k eql}) :
     {m: mapRep R | WFM eql R m} -> 
       {m: mapRep R | WFM eql R m /\ forall a b, proof (proj1_sig l) a b -> m a = m b}.
 Proof.
 intros. destruct l as [l Hpf].
-simpl in *. destruct X as [x W]. induction l as [ | hl l' IHl'].
+simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
 - simpl. assert (F : forall (a b:term), False -> x a = x b). 
   { intros. exfalso. assumption. } exists x. split; try assumption.
   intros r k H. destruct H.
@@ -272,9 +278,27 @@ simpl in *. destruct X as [x W]. induction l as [ | hl l' IHl'].
   + reflexivity.
   + apply emp_proof_eq in H. subst. reflexivity.
   + apply emp_proof_eq in H. apply emp_proof_eq in H0. subst. reflexivity.
-- clear do_tc. apply suffix_antimon in Hpf. (* Make copy of Hpf before both apply. *)
-  apply IHl' in Hpf. clear IHl'. destruct Hpf as [m' [HWFM Htc]].
+- clear do_tc. assert(HPf := Hpf). apply suffix_antimon in Hpf. 
+  rename Hpf into Hpf'. assert(Hres := Hpf').
+  apply IHl' in Hres. clear IHl'. destruct Hres as [m' [HWFM Htc]].
+  (* Seperate proof, combine later, after merge. *)
   (* Now use merge to build goal. *)
+  assert(H1 : Occurs ((hl1,hl2)::l') hl1).
+  { unfold Occurs. exists hl2. simpl. repeat left; reflexivity. }
+  assert(H2 : Occurs ((hl1,hl2)::l') hl2).
+  { unfold Occurs. exists hl1. simpl. right. left; reflexivity. }
+  (* Use Occurs monotonic, to prove asserts. *)
+  assert(h1' : Occurs eql hl1). { admit. } clear H1.
+  assert(h2' : Occurs eql hl2). { admit. } clear H2.
+  Check exist. pose(E1 := exist (Occurs eql)). 
+  assert(H1:=h1'). assert(H2:=h2').
+  apply E1 in h1'. apply E1 in h2'. clear E1.
+  assert(A1 : proof eql (proj1_sig h1') (proj1_sig h2')). { admit. }
+  pose(E2 := exist (WFM eql R)). apply E2 in W. clear E2.
+  pose (C := merge R eql h1' h2' A1 W). (* Had to make param R of merge explicit. *)
+  (* W here is the result of recursive call to do_tc. *)
+  destruct C as [M [HM1 HM2]]. (* M. the result of merge, is our witness. *)
+  (* We need that merge does not touch other classes? coz we need that M satisfies Htc like m'.  *)
   
 
 (*    :=
