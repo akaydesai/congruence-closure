@@ -146,26 +146,20 @@ Check Occurs [].
 Example test: (Occurs [(var 1, var 2)] (var 2)).
 Proof. unfold Occurs. exists (var 1). simpl. right. left; reflexivity. Qed.
 
-Definition mapRep (R: Type) := term -> option R.
+Definition Decidable_Eq (T:Type) := forall a b: T, Decidable.decidable (a = b).
+
+(* We need term -> R , where R is decidable. *)
+Definition mapRep (R:{T: Type | Decidable_Eq T }) := 
+(*   term -> {T: Type | forall a b: T, Decidable.decidable (a = b)}. *)
+  term -> (proj1_sig R).
 
 (* Well-formed Map *)
-Definition WFM (eql: list (term*term)) (R: Type) : mapRep R -> Prop := 
-  fun ufm =>
-(*     (forall t, exists r, ufm t = Some r <-> Occurs eql t) /\  *)
-(*       (forall t, ufm t = None <-> ~ Occurs eql t) /\ *)
+Definition WFM (eql: list (term*term)) (R:{T: Type | Decidable_Eq T}) : 
+  mapRep R -> Prop := 
+    fun ufm =>
+(*      (forall t, exists r, ufm t = Some r <-> Occurs eql t) /\  *)
+(*         (forall t, ufm t = None <-> ~ Occurs eql t) /\ *)
         (forall t1 t2, ufm t1 = ufm t2 -> proof eql t1 t2).
-
-Theorem WFM_is_strong: forall (eql: list (term* term)) R (ufm: mapRep R) t, 
-  (exists r, ufm t = Some r <-> Occurs eql t) -> (ufm t = None <-> ~ Occurs eql t).
-Proof.
-  intros. split.
-  - intros. unfold not. intros. destruct H as [r [Ha Hb]]. apply Hb in H1.
-    rewrite H1 in H0. discriminate. 
-  - unfold not. intros. destruct H as [r [Ha Hb]]. 
-    (* Apparently, not strong enough. Strengthen, just in case we need this.
-       Do we, though? *) 
-    admit.
-Admitted.
 
 Lemma proof_implies_occurence: forall l a b, 
   l <> [] /\ proof l a b -> Occurs l a /\ Occurs l b.
@@ -261,7 +255,7 @@ Qed.
 
 Check sig (Occurs []).
 Check exist (Occurs []).
-Search list.
+(* Search list. *)
 (* Check sig term. *) 
 (* Alternate design, use two lists, one as accumulator of processed eqs; but this doesn't extend to cong closure; where we find fixpoint of ufm(Check with Manna). *)
 
@@ -285,7 +279,9 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
 - clear do_tc. assert(HPf := Hpf). apply suffix_antimon in Hpf. 
   rename Hpf into Hpf'. assert(Hres := Hpf').
   (* Hres is the result of recursive call to do_tc, m' is the corresponding MapRep. *)
-  apply IHl' in Hres. clear IHl'. destruct Hres as [m' [Hm'WFM Hm'tc]].
+  apply IHl' in Hres. clear IHl'.
+  assert(HResN := Hres).
+  destruct Hres as [m' [Hm'WFM Hm'tc]].
   (* Now use merge to build goal. That's why we did destruct Hres. So we can call merge.
   Show that m' and result of merge differ only in the case where the equiv class of a is concerned. *)
   assert(H1 : Occurs ((hl1,hl2)::l') hl1).
@@ -304,7 +300,7 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   (* C, the result of merge, is our witness. *)
    destruct C as [M [HMpf [HM1 HM2]]].
   (* But, in constructing M, we have lost the information that it was created by modifying m'. Hence Hm'tc is useless, since we can't recover m' from HM1 and HM2. If we could... *)
-  assert(recov1: m' = proj1_sig Hm'WFM). { admit. } 
+(*   assert(recov1: m' = proj1_sig Hm'WFM). { admit. }  *)
 (*   rewrite <- recov1 in HM1. *)
   assert(mergProp1 : forall x, m' x = m' hl1 -> M x = m' hl2).
   { admit. }
@@ -313,19 +309,19 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   (* ...then we can show. Maybe use the fact that classes don't split. *)
   assert(HMrecPf : forall a b : term, proof l' a b -> M a = M b).
   { admit. }
-  (* We need to use HMrecPf, A1 to derive Goal by induction on proof(refer whiteboard)
-     Do case analysis based on antecedent of mergProps? Don't see how that would help.
-      *)
+  (* We need to use HMrecPf, A1 to derive Goal by induction on proof(refer whiteboard) *)
   assert(Hfinal : forall a b, proof ((hl1, hl2)::l') a b -> M a = M b).
   {
     clear HM1; clear HM2.
     intros. induction H.
     - simpl in H. destruct H.
       + inversion H. rewrite <- H3; rewrite <- H4. clear H; clear H3; clear H4.
-        (* Use correctness of merge, which might need fixing. *)
+        (* Case analysis, based on antecedents of mergProps. 
+          Requires equality for R to be decidable. *)
+        pose(P := m' hl1 = m' hl2). 
         admit.
-      + (* Use mergProp1 and Hm'tc *)
-        admit.
+      + (* Use Hm'tc and corr *)
+        apply proofAxm in H. apply Hm'tc in H. admit.
     - reflexivity.
     - symmetry; assumption.
     - rewrite IHproof2 in IHproof1. assumption.
