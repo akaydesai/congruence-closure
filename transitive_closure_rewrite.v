@@ -196,21 +196,24 @@ Locate "<:".
 
 (* Here we go, can't type a b. No subtyping, lets use projections. *)
 (* Maybe we don't need Occurs for merge *)
+(* Cross-check this definition with the correctness condition on whiteboard. *)
 Definition merge {R} eql 
-(a b:{t : term | Occurs eql t}) (Hpf: proof eql (proj1_sig a) (proj1_sig b)) :
-    ({ m: mapRep R | WFM eql R m }) -> 
-      ({ m: mapRep R | WFM eql R m /\ m (proj1_sig a) = m (proj1_sig b) }).
+(a b:{t : term | Occurs eql t}) (Hpf: proof eql (proj1_sig a) (proj1_sig b))
+  (ufm: { m: mapRep R | WFM eql R m }) :
+      ({ m: mapRep R | WFM eql R m /\ 
+        forall x, (proj1_sig ufm) x = (proj1_sig ufm) (proj1_sig a) -> 
+          m x = m (proj1_sig b) }).
 Admitted.
 (* But now we need to recover map of type { m:mapRep R | WFM } for use by do_tc. 
    How?
    Take proj2 to get proofs and recover fst proof and build back sig type over mapRep.
    FML! *)
 
-Lemma aux1 : forall l x y, Occurs ((x,y)::l) x. (* /\ Occurs ((x,y)::l) y. *)
+Lemma aux1 : forall l x y, Occurs ((x,y)::l) x /\ Occurs ((x,y)::l) y.
 Proof.
-  intros. unfold Occurs. (* split. *)
+  intros. unfold Occurs. split.
   - exists y. simpl. repeat left. reflexivity.
-(*   - exists x. simpl. right. left. reflexivity. *)
+  - exists x. simpl. right. left. reflexivity.
 Defined.
 
 (* Restrict to nonempty eql?, otherwise problems due to "forall t, proof [] t t"*)
@@ -230,6 +233,24 @@ Proof.
   intros. destruct H. Search "_ ++ _".
 Admitted.
 
+Lemma emp_no_proof: forall a b, a <> b -> ~(proof [] a b).
+Proof.
+  unfold not. intros a b H Hprf. 
+  induction Hprf; simpl in *;try assumption.
+  - apply H; reflexivity. 
+  - apply IHHprf. intros. subst. apply H. reflexivity.
+  - apply IHHprf1. intros. subst. apply IHHprf2. intros. subst. apply H. reflexivity.
+Qed.
+
+Lemma emp_proof_eq: forall a b, proof [] a b -> a = b.
+Proof.
+  intros. induction H.
+  - simpl in H; contradiction.
+  - reflexivity.
+  - symmetry; assumption.
+  - subst. reflexivity.
+Qed.
+
 Check sig (Occurs []).
 Check exist (Occurs []).
 Search list.
@@ -240,16 +261,21 @@ Search list.
    Well, lets ignore query terms for now and only show soundness and completeness for do_tc. *)
 Fixpoint do_tc {R} (eql: list (term*term)) (l: {k: list (term*term) | suffix k eql}) :
     {m: mapRep R | WFM eql R m} -> 
-      {m: mapRep R | WFM eql R m /\ forall a b, In (a,b) (proj1_sig l) -> m a = m b}.
+      {m: mapRep R | WFM eql R m /\ forall a b, proof (proj1_sig l) a b -> m a = m b}.
 Proof.
 intros. destruct l as [l Hpf].
-simpl in *. destruct X as [x w]. induction l as [ | hl l' IHl'].
+simpl in *. destruct X as [x W]. induction l as [ | hl l' IHl'].
 - simpl. assert (F : forall (a b:term), False -> x a = x b). 
-  { intros. exfalso. assumption. } exists x. split; assumption.
+  { intros. exfalso. assumption. } exists x. split; try assumption.
+  intros r k H. destruct H.
+  + simpl in H. contradiction.
+  + reflexivity.
+  + apply emp_proof_eq in H. subst. reflexivity.
+  + apply emp_proof_eq in H. apply emp_proof_eq in H0. subst. reflexivity.
 - clear do_tc. apply suffix_antimon in Hpf. (* Make copy of Hpf before both apply. *)
   apply IHl' in Hpf. clear IHl'. destruct Hpf as [m' [HWFM Htc]].
   (* Now use merge to build goal. *)
-  Check merge.
+  
 
 (*    :=
   fun l ufm => 
