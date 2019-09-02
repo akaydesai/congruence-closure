@@ -153,6 +153,9 @@ Definition mapRep (R:{T: Type | Decidable_Eq T }) :=
 (*   term -> {T: Type | forall a b: T, Decidable.decidable (a = b)}. *)
   term -> (proj1_sig R).
 
+Definition DecEqT (R:{T: Type | Decidable_Eq T }) := 
+  forall (x y: (proj1_sig R)), {x = y} + {x <> y}.
+
 (* Well-formed Map *)
 Definition WFM (eql: list (term*term)) (R:{T: Type | Decidable_Eq T}) : 
   mapRep R -> Prop := 
@@ -262,7 +265,7 @@ Check exist (Occurs []).
 (* Remove Occurs from merge, How do you do that without needing to add query terms?
    Well, lets ignore query terms for now and only show soundness and completeness for do_tc. *)
 (* Inducting on eql without keeping a copy should be sufficient for tc, since WFM is valid due to monotonicity of proof. *)
-Fixpoint do_tc {R} (eql: list (term*term)) (l: {k: list (term*term) | suffix k eql}) :
+Fixpoint do_tc {R} (decProc: DecEqT R) (eql: list (term*term)) (l: {k: list (term*term) | suffix k eql}) :
     {m: mapRep R | WFM eql R m} -> 
       {m: mapRep R | WFM eql R m /\ forall a b, proof (proj1_sig l) a b -> m a = m b}.
 Proof.
@@ -295,20 +298,43 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   assert(H1:=h1'). assert(H2:=h2').
   apply E1 in h1'. apply E1 in h2'. clear E1.
   assert(A1 : proof eql hl1 hl2). { admit. } (* Easy *)
-  pose(E2 := exist (WFM eql R)). apply E2 in Hm'WFM. clear E2.
-  pose (C := merge R eql hl1 hl2 A1 Hm'WFM). (* Had to make param R of merge explicit *)
+  pose(E2 := exist (WFM eql R) m').
+  pose (C := merge R eql hl1 hl2 A1 (E2 Hm'WFM)).
+  (* Had to make param R of merge explicit *)
   (* C, the result of merge, is our witness. *)
    destruct C as [M [HMpf [HM1 HM2]]].
-  (* But, in constructing M, we have lost the information that it was created by modifying m'. Hence Hm'tc is useless, since we can't recover m' from HM1 and HM2. If we could... *)
-(*   assert(recov1: m' = proj1_sig Hm'WFM). { admit. }  *)
-(*   rewrite <- recov1 in HM1. *)
+  (* But, in constructing M, we have lost the information that it was created by modifying m'. Hence Hm'tc is useless, since we can't recover m' from HM1 and HM2.
+  When creating the sig type, we also need m' to be the witness for the subtype.
+  But this would require m' to belong to two types, which needs subtyping.
+  If we could recover... *)
+(*   unfold E2 in H. unfold E2 in HM1. *)
+  assert(recov: m' = (proj1_sig (E2 Hm'WFM))). { simpl. reflexivity. }
+  try setoid_rewrite <- recov in HM1. (* Why won't this work? *)
+
+  assert(HM1n := HM1 hl2). clear HM1.  (* unfold WFM in Hm'WFM. *)
+(*   rewrite <- recov in HM1n. (* Wtf *) *)
+
   assert(mergProp1 : forall x, m' x = m' hl1 -> M x = m' hl2).
   { admit. }
     assert(mergProp2 : forall x, m' x <> m' hl1 -> M x = m' x).
   { admit. }
   (* ...then we can show. Maybe use the fact that classes don't split. *)
   assert(HMrecPf : forall a b : term, proof l' a b -> M a = M b).
-  { admit. }
+  { 
+    intros. induction H.
+    - apply proofAxm in H. apply Hm'tc in H.
+      (* Case analysis, antecedents of mergeprop. *)
+      pose(P := decProc (m' t) (m' hl1)). destruct P as [P|P].
+      + pose(Tmerg1 := mergProp1 t). pose(Tmerg2 := mergProp1 s).
+         rewrite P in H. apply Tmerg1 in P. apply Tmerg2 in H.
+         rewrite H, P. reflexivity.
+      + pose(Tmerg1 := mergProp2 t). pose(Tmerg2 := mergProp2 s).
+        assert(Pn := P). rewrite <- H in P. apply Tmerg2 in P.
+        apply Tmerg1 in Pn. rewrite P, Pn. assumption.
+    - reflexivity.
+    - symmetry; assumption.
+    - rewrite IHproof2 in IHproof1. assumption.
+  }
   (* We need to use HMrecPf, A1 to derive Goal by induction on proof(refer whiteboard) *)
   assert(Hfinal : forall a b, proof ((hl1, hl2)::l') a b -> M a = M b).
   {
