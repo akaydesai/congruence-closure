@@ -310,9 +310,9 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
 (*   unfold E2 in H. unfold E2 in HM1. *)
   assert(recov: m' = (proj1_sig (E2 Hm'WFM))). { simpl. reflexivity. }
   try setoid_rewrite <- recov in HM1. (* Why won't this work? *)
-
-  assert(HM1n := HM1 hl2). clear HM1.  (* unfold WFM in Hm'WFM. *)
-(*   rewrite <- recov in HM1n. (* Wtf *) *)
+  (* Let's try removing the forall x, *)
+  assert(HM1n := HM1 hl2). (* unfold WFM in Hm'WFM. *)
+(*   setoid_rewrite <- recov in HM1n. (* Wtf *) *)
 
   assert(mergProp1 : forall x, m' x = m' hl1 -> M x = m' hl2).
   { admit. }
@@ -320,10 +320,12 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   { admit. }
   (* ...then we can show. Maybe use the fact that classes don't split. *)
   assert(HMrecPf : forall a b : term, proof l' a b -> M a = M b).
+  (* Maybe we don't need this assertion. *)
   { 
     intros. induction H.
     - apply proofAxm in H. apply Hm'tc in H.
-      (* Case analysis, antecedents of mergeprop. *)
+      (* Make this goal a lemma, keeps coming up everywhere. *)
+      (* Case analysis, based on antecedents of mergeprops. *)
       pose(P := decProc (m' t) (m' hl1)). destruct P as [P|P].
       + pose(Tmerg1 := mergProp1 t). pose(Tmerg2 := mergProp1 s).
          rewrite P in H. apply Tmerg1 in P. apply Tmerg2 in H.
@@ -344,17 +346,26 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
       + inversion H. rewrite <- H3; rewrite <- H4. clear H; clear H3; clear H4.
         (* Case analysis, based on antecedents of mergProps. 
           Requires equality for R to be decidable. *)
-        pose(P := m' hl1 = m' hl2). 
-        admit.
+        pose(P := decProc (m' hl2) (m' hl1)). 
+        assert(Pn : m' hl1 = m' hl1). { reflexivity. } apply (mergProp1 hl1) in Pn.
+        destruct P as [P|P].
+        * apply (mergProp1 hl2) in P. 
+          rewrite <- Pn in P. symmetry; assumption.
+        * apply (mergProp2 hl2) in P. rewrite <- Pn in P. symmetry; assumption.
       + (* Use Hm'tc and corr *)
-        apply proofAxm in H. apply Hm'tc in H. admit.
+        apply proofAxm in H. apply Hm'tc in H.
+        (* Case analysis, based on antecedents of mergProps. *)
+        pose(P := decProc (m' t) (m' hl1)). destruct P as [P|P].
+        (* Same arg as above *)
+        * admit.
+        * admit.
     - reflexivity.
     - symmetry; assumption.
     - rewrite IHproof2 in IHproof1. assumption.
   }
-  (* Need sig2 to construct witness? *)
-  
+  exists M. split; assumption.
 Admitted.
+
 (*    :=
   fun l ufm => 
     match l with
