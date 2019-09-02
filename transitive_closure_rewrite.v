@@ -197,13 +197,13 @@ Locate "<:".
 (* Cross-check this definition with the correctness condition on whiteboard. *)
 Definition merge R eql 
 (* R had to be explicit o/w type cannot be inferred in proof of do_tc *)
-(a b:{t : term | Occurs eql t}) (Hpf: proof eql (proj1_sig a) (proj1_sig b))
+(a b: term) (Hpf: proof eql a b)
   (ufm: { m: mapRep R | WFM eql R m }) :
       ({ m: mapRep R | WFM eql R m /\ 
-        (forall x, (proj1_sig ufm) x = (proj1_sig ufm) (proj1_sig a) -> 
-                    m x = (proj1_sig ufm) (proj1_sig b)) /\ 
+        (forall x, (proj1_sig ufm) x = (proj1_sig ufm) a -> 
+                    m x = (proj1_sig ufm) b) /\ 
                     (* Stronger: RHS above = (proj1_sig ufm) b, but this is implied by next conjunct, so let's explicity say it anyways instead of m (proj1_sig b) *)
-          (forall x, (proj1_sig ufm) x <> (proj1_sig ufm) (proj1_sig a) ->
+          (forall x, (proj1_sig ufm) x <> (proj1_sig ufm) a ->
                     (proj1_sig ufm) x = m x) } ).
 Admitted.
 (* But now we need to recover map of type { m:mapRep R | WFM } for use by do_tc. 
@@ -261,7 +261,7 @@ Check exist (Occurs []).
 
 (* Remove Occurs from merge, How do you do that without needing to add query terms?
    Well, lets ignore query terms for now and only show soundness and completeness for do_tc. *)
-(* Inducting on eql without keeping a copy should be sufficient for tc.(?) *)
+(* Inducting on eql without keeping a copy should be sufficient for tc, since WFM is valid due to monotonicity of proof. *)
 Fixpoint do_tc {R} (eql: list (term*term)) (l: {k: list (term*term) | suffix k eql}) :
     {m: mapRep R | WFM eql R m} -> 
       {m: mapRep R | WFM eql R m /\ forall a b, proof (proj1_sig l) a b -> m a = m b}.
@@ -276,7 +276,7 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   + reflexivity.
   + apply emp_proof_eq in H. subst. reflexivity.
   + apply emp_proof_eq in H. apply emp_proof_eq in H0. subst. reflexivity.
-- clear do_tc. assert(HPf := Hpf). apply suffix_antimon in Hpf. 
+- clear do_tc. assert(HPf := Hpf). apply suffix_antimon in Hpf.
   rename Hpf into Hpf'. assert(Hres := Hpf').
   (* Hres is the result of recursive call to do_tc, m' is the corresponding MapRep. *)
   apply IHl' in Hres. clear IHl'.
@@ -294,9 +294,9 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   Check exist. pose(E1 := exist (Occurs eql)). 
   assert(H1:=h1'). assert(H2:=h2').
   apply E1 in h1'. apply E1 in h2'. clear E1.
-  assert(A1 : proof eql (proj1_sig h1') (proj1_sig h2')). { admit. } (* Easy *)
+  assert(A1 : proof eql hl1 hl2). { admit. } (* Easy *)
   pose(E2 := exist (WFM eql R)). apply E2 in Hm'WFM. clear E2.
-  pose (C := merge R eql h1' h2' A1 Hm'WFM). (* Had to make param R of merge explicit. *)
+  pose (C := merge R eql hl1 hl2 A1 Hm'WFM). (* Had to make param R of merge explicit *)
   (* C, the result of merge, is our witness. *)
    destruct C as [M [HMpf [HM1 HM2]]].
   (* But, in constructing M, we have lost the information that it was created by modifying m'. Hence Hm'tc is useless, since we can't recover m' from HM1 and HM2. If we could... *)
