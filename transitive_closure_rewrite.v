@@ -119,13 +119,34 @@ Inductive proof (l : list (term*term)) : term -> term -> Prop :=
   | proofSymm : forall s t, proof l s t -> proof l t s
   | proofTrans : forall s t u, proof l s t -> proof l t u -> proof l s u.
 
-Lemma proof_monotonic : forall h l a b, proof l a b -> proof (h::l) a b.
+Lemma proof_monotonic_cons : forall h l a b, proof l a b -> proof (h::l) a b.
 Proof.
   intros h l a b Hprf. induction Hprf.
   - apply proofAxm. simpl. right. assumption.
   - apply proofRefl.
   - apply proofSymm. assumption.
   - apply (proofTrans (h::l) s t u); assumption.
+Qed.
+
+(* Generalization of in_cons *)
+Lemma In_mono: forall A (l k: list A) (x: A), In x l -> In x (k++l).
+Proof.
+  intros. induction k as [| h k' IHk'].
+  - simpl. assumption.
+  - simpl. right; assumption.
+Qed.
+
+(* Maybe gen to proof l a b \/ proof k a b -> proof (l++k) a b *)
+Lemma proof_monotonic : forall k l a b, proof l a b -> proof (k++l) a b.
+Proof.
+  intros k l. induction k as [|hk k' IHk'].
+  - intros; simpl; assumption.
+  - intros.  induction H.  
+    + apply (In_mono (term*term) l k' (s,t)) in H. apply proofAxm in H. simpl.
+      apply proof_monotonic_cons. assumption.
+    + apply proofRefl.
+    + apply proofSymm. apply IHproof.
+    + apply (proofTrans _ s t u); [apply IHproof1 | apply IHproof2].
 Qed.
 
 (* Definition ufm (l:list term) (R: Type) (t:{ x:term | In x l }) : term := var 0. *)
@@ -179,7 +200,7 @@ Proof.
       simpl in H1; contradiction.
   - induction H.
   
-Admitted.
+Admitted. (* Not used *)
 
 (* Dummy merge for now *)
 (* Definition merge {R} eql : 
@@ -235,8 +256,9 @@ Definition suffix {A} (a b: list A) := exists c, b = c ++ a.
 Lemma suffix_antimon : forall A (a:A) (l1 l2: list A), 
   suffix (a::l1) l2 -> suffix l1 l2.
 Proof.
-  intros. destruct H. Search "_ ++ _".
-Admitted.
+  intros. destruct H. unfold suffix. exists (x++[a]). Locate "++". Search app.
+  rewrite <- app_assoc. simpl. assumption.
+Qed.
 
 Lemma emp_no_proof: forall a b, a <> b -> ~(proof [] a b).
 Proof.
@@ -256,6 +278,16 @@ Proof.
   - subst. reflexivity.
 Qed.
 
+Lemma occurs_mono: forall l l' x, suffix l' l -> Occurs l' x -> Occurs l x.
+Proof.
+  intros. unfold suffix in H. destruct H as [el H]. rewrite H. unfold Occurs in H0.
+  destruct H0 as [y H0]. 
+(*   assert(A: forall h x, Occurs l' x -> Occurs(h::l') x). admit. *)
+  unfold Occurs. exists y. destruct el as [| h el'].
+  - simpl. assumption.
+  - simpl. destruct H0; [left| right]; right; apply In_mono; assumption.
+Qed.
+
 Check sig (Occurs []).
 Check exist (Occurs []).
 (* Search list. *)
@@ -265,7 +297,8 @@ Check exist (Occurs []).
 (* Remove Occurs from merge, How do you do that without needing to add query terms?
    Well, lets ignore query terms for now and only show soundness and completeness for do_tc. *)
 (* Inducting on eql without keeping a copy should be sufficient for tc, since WFM is valid due to monotonicity of proof. *)
-Fixpoint do_tc {R} (decProc: DecEqT R) (eql: list (term*term)) (l: {k: list (term*term) | suffix k eql}) :
+Fixpoint do_tc {R} (decProc: DecEqT R) (eql: list (term*term)) 
+  (l: {k: list (term*term) | suffix k eql}) :
     {m: mapRep R | WFM eql R m} -> 
       {m: mapRep R | WFM eql R m /\ forall a b, proof (proj1_sig l) a b -> m a = m b}.
 Proof.
@@ -292,12 +325,22 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   assert(H2 : Occurs ((hl1,hl2)::l') hl2).
   { unfold Occurs. exists hl1. simpl. right. left; reflexivity. }
   (* Use Occurs monotonic, to prove asserts. *)
-  assert(h1' : Occurs eql hl1). { admit. } clear H1. (* Easy *)
-  assert(h2' : Occurs eql hl2). { admit. } clear H2. (* Easy *)
+  assert(h1' : Occurs eql hl1). 
+  { apply (occurs_mono eql ((hl1,hl2)::l')); assumption. } clear H1.
+  assert(h2' : Occurs eql hl2).
+  { apply (occurs_mono eql ((hl1,hl2)::l')); assumption. } clear H2.
   Check exist. pose(E1 := exist (Occurs eql)). 
   assert(H1:=h1'). assert(H2:=h2').
   apply E1 in h1'. apply E1 in h2'. clear E1.
-  assert(A1 : proof eql hl1 hl2). { admit. } (* Easy *)
+  assert(A1 : proof eql hl1 hl2). 
+  {
+    unfold suffix in HPf. destruct HPf as [y HPf]. rewrite HPf.
+    assert(A: proof ((hl1,hl2)::l') hl1 hl2). 
+    { apply proofAxm. simpl. left; reflexivity. }
+    (* Prove by showing generalized monotonicity of proof(++ instead of ::) *)
+    (* This might've not been necessary if we were only using one list: eql *)
+    apply proof_monotonic. assumption.
+  }
   pose(E2 := exist (WFM eql R) m').
   pose (C := merge R eql hl1 hl2 A1 (E2 Hm'WFM)).
   (* Had to make param R of merge explicit *)
@@ -311,13 +354,15 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   assert(recov: m' = (proj1_sig (E2 Hm'WFM))). { simpl. reflexivity. }
   try setoid_rewrite <- recov in HM1. (* Why won't this work? *)
   (* Let's try removing the forall x, *)
-  assert(HM1n := HM1 hl2). (* unfold WFM in Hm'WFM. *)
-(*   setoid_rewrite <- recov in HM1n. (* Wtf *) *)
+  assert(HM1n := HM1 hl2). try rewrite <- recov in HM1n. (* Wtf *)
+(*   unfold WFM in Hm'WFM. rewrite <- recov in HM1n. *) (* Nope! *)
+  assert(recovG: forall q, m' q = proj1_sig (E2 Hm'WFM) q).
+  { intros. simpl. reflexivity. }
+(*   setoid_rewrite <- (recovG hl2) in HM1. (* Phew!! *) clear HM1n. *)
+  setoid_rewrite <- recovG in HM1. (* This does all *) clear HM1n.
+  setoid_rewrite <- recovG in HM2. clear recov recovG.
+  rename HM1 into mergProp1. rename HM2 into mergProp2.
 
-  assert(mergProp1 : forall x, m' x = m' hl1 -> M x = m' hl2).
-  { admit. }
-    assert(mergProp2 : forall x, m' x <> m' hl1 -> M x = m' x).
-  { admit. }
   (* ...then we can show. Maybe use the fact that classes don't split. *)
   assert(HMrecPf : forall a b : term, proof l' a b -> M a = M b).
   (* Maybe we don't need this assertion. *)
@@ -332,7 +377,7 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
          rewrite H, P. reflexivity.
       + pose(Tmerg1 := mergProp2 t). pose(Tmerg2 := mergProp2 s).
         assert(Pn := P). rewrite <- H in P. apply Tmerg2 in P.
-        apply Tmerg1 in Pn. rewrite P, Pn. assumption.
+        apply Tmerg1 in Pn. rewrite <- P, <- Pn. assumption.
     - reflexivity.
     - symmetry; assumption.
     - rewrite IHproof2 in IHproof1. assumption.
@@ -340,7 +385,6 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   (* We need to use HMrecPf, A1 to derive Goal by induction on proof(refer whiteboard) *)
   assert(Hfinal : forall a b, proof ((hl1, hl2)::l') a b -> M a = M b).
   {
-    clear HM1; clear HM2.
     intros. induction H.
     - simpl in H. destruct H.
       + inversion H. rewrite <- H3; rewrite <- H4. clear H; clear H3; clear H4.
@@ -351,30 +395,12 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
         destruct P as [P|P].
         * apply (mergProp1 hl2) in P. 
           rewrite <- Pn in P. symmetry; assumption.
-        * apply (mergProp2 hl2) in P. rewrite <- Pn in P. symmetry; assumption.
+        * apply (mergProp2 hl2) in P. rewrite <- Pn in P. assumption.
       + (* Use Hm'tc and corr *)
-        apply proofAxm in H. apply Hm'tc in H.
-        (* Case analysis, based on antecedents of mergProps. *)
-        pose(P := decProc (m' t) (m' hl1)). destruct P as [P|P].
-        (* Same arg as above *)
-        * admit.
-        * admit.
+        apply proofAxm in H. pose (HMrecPf s t). apply e; assumption.
     - reflexivity.
     - symmetry; assumption.
     - rewrite IHproof2 in IHproof1. assumption.
   }
-  exists M. split; assumption.
-Admitted.
-
-(*    :=
-  fun l ufm => 
-    match l with
-    | [] => ufm
-    | (t1, t2)::l' => let a := exist (fun t1 => aux1 l' t1 t2) in
-(*                       let a := ((exist (Occurs eql)) t1)  in *)
-                      let b := sig (Occurs eql) in
-                      let merged := (merge eql a b ufm) in
-                      let wfm := proj1 (proj1_sig merged) in
-(*                       let prf := proj1 (proj2_sig merged) in *)
-                        do_tc eql l' wfm
-    end. *)
+ exists M. split; assumption.
+Defined.
