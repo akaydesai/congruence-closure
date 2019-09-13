@@ -174,16 +174,23 @@ Definition mapRep (R:{T: Type | Decidable_Eq T }) :=
 (*   term -> {T: Type | forall a b: T, Decidable.decidable (a = b)}. *)
   term -> (proj1_sig R).
 
+Definition mapClass (R:{T: Type | Decidable_Eq T}) := (proj1_sig R) -> list term.
+
 Definition DecEqT (R:{T: Type | Decidable_Eq T }) := 
   forall (x y: (proj1_sig R)), {x = y} + {x <> y}.
 
-(* Well-formed Map *)
+(* Well-formed Rep Map *)
 Definition WFM (eql: list (term*term)) (R:{T: Type | Decidable_Eq T}) : 
   mapRep R -> Prop := 
     fun ufm =>
 (*      (forall t, exists r, ufm t = Some r <-> Occurs eql t) /\  *)
 (*         (forall t, ufm t = None <-> ~ Occurs eql t) /\ *)
         (forall t1 t2, ufm t1 = ufm t2 -> proof eql t1 t2).
+
+(* Well formed reverse map, aka class map *)
+Definition WFC (eql: list (term*term)) (R:{T: Type | Decidable_Eq T}) :
+  mapClass R -> Prop :=
+    fun cm => forall x y r, In x (cm r) /\ In y (cm r) -> proof eql x y.
 
 Lemma proof_implies_occurence: forall l a b, 
   l <> [] /\ proof l a b -> Occurs l a /\ Occurs l b.
@@ -234,6 +241,25 @@ Admitted.
    How?
    Take proj2 to get proofs and recover fst proof and build back sig type over mapRep.
    FML! *)
+
+Locate "*". Print prod. 
+(* merge should be implementable with this augmented type. Might need to use partial maps.
+  Simplify all complicated types using lets? *)
+Definition merge' R eql
+(a b: term) (Hpf: proof eql a b)
+  (maps:{m : ({mr: mapRep R | WFM eql R mr } * {mc: mapClass R | WFC eql R mc}) | 
+  forall t r, (proj1_sig (fst m)) t = r <-> In t ((proj1_sig (snd m)) r) })
+  :
+  {m : ({mr: mapRep R | WFM eql R mr } * {mc: mapClass R | WFC eql R mc}) | 
+  forall t r, 
+    (proj1_sig (fst m)) t = r <-> In t ((proj1_sig (snd m)) r) /\ 
+  forall t, 
+    (proj1_sig (fst (proj1_sig maps))) t = (proj1_sig (fst (proj1_sig maps))) a -> 
+      (proj1_sig (fst m)) t = (proj1_sig (fst (proj1_sig maps))) b /\
+  forall t, 
+    (proj1_sig (fst (proj1_sig maps))) t <> (proj1_sig (fst (proj1_sig maps))) a -> 
+      (proj1_sig (fst m)) t = (proj1_sig (fst (proj1_sig maps))) t }.
+Admitted.
 
 Lemma aux1 : forall l x y, Occurs ((x,y)::l) x /\ Occurs ((x,y)::l) y.
 Proof.
