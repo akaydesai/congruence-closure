@@ -196,19 +196,26 @@ Definition WFM (eql: list (term*term)) (R:{T: Type | Decidable_Eq T}) :
     fun ufm =>
         (forall t1 t2, ufm t1 = ufm t2 -> proof eql (proj1_sig t1) (proj1_sig t2)).
 
-Lemma WFM'_preserved : forall h l R m, WFM (h::l) R m -> exists m', WFM l R m'.
+Check exist.
+Check sigT.
+
+Lemma WFM_preserved : forall h l R m, WFM (h::l) R m -> exists m', WFM l R m'.
+(* intros. pose(forall t, if In l t then m t else False). *)
 Admitted.
 
 (* The actual merge operation.
 (R in merge had to be explicit o/w type cannot be inferred in proof of do_tc) *)
+(* TODO: Check correctness conditions for parents. *)
 Definition merge R eql 
 (a b: {t: term | Occurs eql t}) (Hpf: proof eql (proj1_sig a) (proj1_sig b))
   (ufm: { m: mapRep eql R | WFM eql R m }) :
       ({ m: mapRep eql R | WFM eql R m /\ 
         (forall x, (proj1_sig ufm) x = (proj1_sig ufm) a -> 
-                    m x = (proj1_sig ufm) b) /\ 
-          (forall x, (proj1_sig ufm) x <> (proj1_sig ufm) a ->
-                    (proj1_sig ufm) x = m x) } ).
+            (forall y, Subterm (proj1_sig x) (proj1_sig y) -> 
+                          m y = (proj1_sig ufm) b)) /\ 
+        (forall x, (proj1_sig ufm) x <> (proj1_sig ufm) a ->
+            (forall y, Subterm (proj1_sig x) (proj1_sig y) -> 
+                          (proj1_sig ufm) y = m y)) } ).
 Admitted.
 
 (* No stupid suffix business, use one list and induct over it. *)
@@ -232,6 +239,12 @@ intros omap. induction eql as [| [x y] eql' imap].
     unfold not in B1. apply (B1 a). assumption.
 (* Well, we showed both. Ok! *)
 - (* Use merge to build goal. *)
+  destruct omap as [omap omapH]. apply WFM_preserved in omapH. 
+(*   destruct omapH. *)
+  exists omap. split.
+  + (* Augment omapH to produce goal. *)
+    admit.
+  + intros.
   
 
 Admitted.
