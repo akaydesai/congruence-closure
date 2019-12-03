@@ -201,11 +201,13 @@ Check sigT.
 
 Lemma WFM_preserved : forall h l R m, WFM (h::l) R m -> exists m', WFM l R m'.
 (* intros. pose(forall t, if In l t then m t else False). *)
-Admitted.
+Abort.
 
 (* The actual merge operation.
 (R in merge had to be explicit o/w type cannot be inferred in proof of do_tc) *)
 (* TODO: Check correctness conditions for parents. *)
+(* TODO: merge should return WFM ((a, b)::eql) since we are inducting on eql.
+Maybe suffix design was simpler. *)
 Definition merge R eql 
 (a b: {t: term | Occurs eql t}) (Hpf: proof eql (proj1_sig a) (proj1_sig b))
   (ufm: { m: mapRep eql R | WFM eql R m }) :
@@ -246,6 +248,7 @@ intros omap. induction eql as [| [x y] eql' imap].
     pose(I1 := exist (WFM eql' R) m'). apply I1 in m'WF. apply imap in m'WF.
     clear imap do_cc I1. rename m' into m. rename m'WF into mWF.
     (* Lost information that m is omap, WFM_preserved is too weak. *)
+    assert(A2: m = proj1_s())
   
 
 Admitted.
