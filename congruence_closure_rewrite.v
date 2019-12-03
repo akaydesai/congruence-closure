@@ -238,13 +238,14 @@ intros omap. induction eql as [| [x y] eql' imap].
   + intros. exfalso. destruct a as [a aPrf].
     unfold not in B1. apply (B1 a). assumption.
 (* Well, we showed both. Ok! *)
-- (* Use merge to build goal. *)
-  destruct omap as [omap omapH]. apply WFM_preserved in omapH. 
-(*   destruct omapH. *)
-  exists omap. split.
-  + (* Augment omapH to produce goal. *)
-    admit.
-  + intros.
+- destruct omap as [omap omapH]. exists omap. split.
+  + assumption.
+  + (* Use merge to build goal. *)
+    intros. assert(T1 := omapH).
+    apply WFM_preserved in T1. destruct T1 as [m' m'WF].
+    pose(I1 := exist (WFM eql' R) m'). apply I1 in m'WF. apply imap in m'WF.
+    clear imap do_cc I1. rename m' into m. rename m'WF into mWF.
+    (* Lost information that m is omap, WFM_preserved is too weak. *)
   
 
 Admitted.
