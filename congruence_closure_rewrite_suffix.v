@@ -205,11 +205,10 @@ Definition merge R eql
   (ufm: { m: mapRep R | WFM eql R m }) :
       ({ m: mapRep R | WFM eql R m /\ 
         (forall x, (proj1_sig ufm) x = (proj1_sig ufm) a -> 
-            (forall y, Subterm x y -> 
-                          m y = (proj1_sig ufm) b)) /\ 
+            ( m x = (proj1_sig ufm) b) /\ 
+            forall n, m (fn n x) = (proj1_sig ufm) (fn n b)) /\ 
         (forall x, (proj1_sig ufm) x <> (proj1_sig ufm) a ->
-            (forall y, Subterm x y -> 
-                          (proj1_sig ufm) y = m y)) } ).
+                   (proj1_sig ufm) x = m x) } ).
 Admitted.
 
 (* a is suffix of b *)
@@ -336,15 +335,15 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
   { 
     intros. induction H.
     - apply proofAxm in H. apply Hm'tc in H.
-      (* Make this goal a lemma, keeps coming up everywhere. *)
       (* Case analysis, based on antecedents of mergeprops. *)
       pose(P := decProc (m' t) (m' hl1)). destruct P as [P|P].
       + pose(Tmerg1 := mergProp1 t). pose(Tmerg2 := mergProp1 s).
-         rewrite P in H. pose (P' := Tmerg1 P). pose(H' := Tmerg2 H).
-         rewrite H', P'; try reflexivity; apply subRefl.
+         rewrite P in H. apply Tmerg1 in P. apply Tmerg2 in H.
+         destruct H as [H _]. destruct P as [P _].
+         rewrite H, P. reflexivity.
       + pose(Tmerg1 := mergProp2 t). pose(Tmerg2 := mergProp2 s).
-        assert(Pn := P). rewrite <- H in P. pose(P'' := Tmerg2 P).
-        pose(Pn' := Tmerg1 Pn). rewrite <- P'', <- Pn'; try assumption; apply subRefl.
+        assert(Pn := P). rewrite <- H in P. apply Tmerg2 in P.
+        apply Tmerg1 in Pn. rewrite <- P, <- Pn. assumption.
     - reflexivity.
     - symmetry; assumption.
     - rewrite IHproof2 in IHproof1. assumption.
@@ -357,19 +356,15 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
     intros. induction H.
     - simpl in H. destruct H.
       + inversion H. rewrite <- H3; rewrite <- H4. clear H; clear H3; clear H4.
-        (* Case analysis, based on antecedents of mergProps. 
-          Requires equality for R to be decidable. *)
+        (* Case analysis, based on antecedents of mergProps. *)
         pose(P := decProc (m' hl2) (m' hl1)). 
-        assert(Pn : m' hl1 = m' hl1). { reflexivity. }
-        pose(Pn' := (mergProp1 hl1) Pn).
+        assert(Pn : m' hl1 = m' hl1). { reflexivity. } apply (mergProp1 hl1) in Pn.
         destruct P as [P|P].
-        * pose(P' := (mergProp1 hl2) P). setoid_rewrite <- (Pn' hl1) in P'.
-          { symmetry. apply (P' hl2). apply subRefl. }
-          { apply subRefl. }
-        * pose(P' := (mergProp2 hl2) P). pose(Pn'' := Pn' hl1). pose(P'' := P' hl2).
-          assert(F1: m' hl2 = M hl2). { apply P''. apply subRefl. }
-          assert(F2: M hl1 = m' hl2). { apply Pn''. apply subRefl. }
-          rewrite <- F1. assumption.
+        * apply (mergProp1 hl2) in P.
+          destruct Pn as [Pn _]. destruct P as [P _].
+          rewrite <- Pn in P. symmetry; assumption.
+        * apply (mergProp2 hl2) in P. destruct Pn as [Pn _].
+          rewrite <- Pn in P. assumption.
       + (* Use Hm'tc and corr *)
         apply proofAxm in H. pose (HMrecPf s t). apply e; assumption.
     - reflexivity.
