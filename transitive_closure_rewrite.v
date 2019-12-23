@@ -225,10 +225,17 @@ Admitted. (* Not used *)
 Locate "<:".
 (* Check subType. *)
 
+Definition init_map {R} : {m : mapRep R | forall a b, a = b <-> m a = m b}.
+Admitted. (* Not used *)
+
+Definition update {R} (m : mapRep R)
+                    (t : term) (r : (proj1_sig R)) :=
+  fun t' => if term_beq t t' then r else m t'.
+
 (* Here we go, can't type a b. No subtyping, lets use projections. *)
 (* Maybe we don't need Occurs for merge *)
 (* Cross-check this definition with the correctness condition on whiteboard. *)
-Definition merge R eql 
+Definition merge R (decProc: DecEqT R) eql 
 (* R had to be explicit o/w type cannot be inferred in proof of do_tc *)
 (a b: term) (Hpf: proof eql a b)
   (ufm: { m: mapRep R | WFM eql R m }) :
@@ -238,7 +245,34 @@ Definition merge R eql
                     (* Stronger: RHS above = (proj1_sig ufm) b, but this is implied by next conjunct, so let's explicity say it anyways instead of m (proj1_sig b) *)
           (forall x, (proj1_sig ufm) x <> (proj1_sig ufm) a ->
                     (proj1_sig ufm) x = m x) } ).
-Admitted.
+Proof.
+pose(repA := proj1_sig ufm a). pose(repB := proj1_sig ufm b). 
+Search ( _ -> bool). About find.
+pose(M := fun t => if decProc (proj1_sig ufm a) (proj1_sig ufm t) then repB else proj1_sig ufm t). exists M. split.
+- unfold WFM. intros t1 t2 H.
+  unfold M in H.
+  case (decProc (proj1_sig ufm a) (proj1_sig ufm t1)) eqn:case1,
+  (decProc (proj1_sig ufm a) (proj1_sig ufm t2)) eqn:case2; 
+  clear case1 case2 M; destruct ufm as [ufm' Hufm].
+  + symmetry in e. 
+    apply Hufm in e. apply Hufm in e0.
+    apply (proofTrans eql t1 a t2); assumption.
+  + clear n. apply Hufm in e. unfold repB in H; simpl in H.
+    apply Hufm in H. apply proofSymm in e. 
+    apply (proofTrans eql t1 a b) in Hpf; try assumption.
+    apply (proofTrans eql t1 b t2); assumption.
+  + simpl in *. unfold repB in H. clear n.
+    apply Hufm in H. apply Hufm in e. apply proofSymm in Hpf.
+    apply (proofTrans eql b a t2) in Hpf; try assumption.
+    apply (proofTrans eql t1 b t2); assumption.
+  + simpl in *. apply Hufm in H. assumption.
+- split; intros; unfold M; case (decProc (proj1_sig ufm a) (proj1_sig ufm x)) eqn:case.
+  + trivial.
+  + symmetry in H; contradiction.
+  + clear case. symmetry in e; contradiction.
+  + trivial.
+Defined.
+
 (* But now we need to recover map of type { m:mapRep R | WFM } for use by do_tc. 
    How?
    Take proj2 to get proofs and recover fst proof and build back sig type over mapRep.
@@ -320,7 +354,7 @@ Check sig (Occurs []).
 Check exist (Occurs []).
 (* Search list. *)
 (* Check sig term. *) 
-(* Alternate design, use two lists, one as accumulator of processed eqs; but this doesn't extend to cong closure; where we find fixpoint of ufm(Check with Manna). *)
+(* Alternate design, use two lists, one as accumulator of processed eqs; but this doesn't extend to cong closure? *)
 
 (* Remove Occurs from merge, How do you do that without needing to add query terms?
    Well, lets ignore query terms for now and only show soundness and completeness for do_tc. *)
@@ -370,7 +404,7 @@ simpl in *. destruct X as [x W]. induction l as [ | (hl1, hl2) l' IHl'].
     apply proof_monotonic. assumption.
   }
   pose(E2 := exist (WFM eql R) m').
-  pose (C := merge R eql hl1 hl2 A1 (E2 Hm'WFM)).
+  pose (C := merge R decProc eql hl1 hl2 A1 (E2 Hm'WFM)).
   (* Had to make param R of merge explicit *)
   (* C, the result of merge, is our witness. *)
    destruct C as [M [HMpf [HM1 HM2]]].
